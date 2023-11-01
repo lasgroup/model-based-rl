@@ -145,3 +145,6 @@ class LearnedModelSystem(System, Generic[ModelState, RewardParams]):
             system_params=self.vmap_input_axis(data_axis),
             done=data_axis,
         )
+
+    def system_params_vmap_axes(self, axes: int = 0):
+        return self.vmap_input_axis(data_axis=axes)
