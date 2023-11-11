@@ -13,7 +13,7 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
 
 @chex.dataclass
-class DynamicsParams(DummyDynamicsParams, Generic[ModelState]):
+class DynamicsParams(Generic[ModelState, DummyDynamicsParams]):
     key: chex.PRNGKey
     model_state: StatisticalModelState[ModelState]
 
@@ -133,7 +133,7 @@ class LearnedModelSystem(System, Generic[ModelState, RewardParams]):
 
     def vmap_input_axis(self, data_axis: int = 0) -> SystemParams[ModelState, RewardParams]:
         return SystemParams(
-            dynamic_params=self.dynamics.vmap_input_axis(data_axis),
+            dynamics_params=self.dynamics.vmap_input_axis(data_axis),
             reward_params=None,
             key=data_axis,
         )
