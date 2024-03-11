@@ -12,11 +12,11 @@ from bsm.statistical_model import StatisticalModel
 from bsm.utils import StatisticalModelState
 from bsm.utils.normalization import Data
 from jax import jit
+from jax.nn import swish
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.base_systems import System
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
-from jax.nn import swish
 
 from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
 from mbrl.utils.brax_utils import EnvInteractor
@@ -253,6 +253,7 @@ if __name__ == "__main__":
     from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
     from mbpo.optimizers import SACOptimizer
     from distrax import Normal
+    from mbrl.utils.offline_data import PendulumOfflineData
 
     ENTITY = 'trevenl'
 
@@ -284,15 +285,19 @@ if __name__ == "__main__":
             return {'dt': env.dt}
 
 
+    offline_data_gen = PendulumOfflineData()
+    key = jr.PRNGKey(0)
+    offline_data = offline_data_gen.sample_transitions(key=key, num_samples=10_000)
+
     horizon = 200
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
         output_dim=env.observation_size,
-        num_training_steps=2000,
-        output_stds=jnp.ones(env.observation_size),
+        num_training_steps=50_000,
+        output_stds=0.01 * jnp.ones(env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
-        logging_wandb=False,
+        logging_wandb=True,
     )
 
     sac_kwargs = {
@@ -332,11 +337,14 @@ if __name__ == "__main__":
                               reward=jnp.array(0.0),
                               discount=jnp.array(0.99),
                               next_observation=jnp.ones(env.observation_size))
+
     sac_buffer = UniformSamplingQueue(
         max_replay_size=max_replay_size_true_data_buffer,
         dummy_data_sample=dummy_sample,
         sample_batch_size=1)
-    optimizer = SACOptimizer(system=None, true_buffer=sac_buffer, **sac_kwargs)
+    optimizer = SACOptimizer(system=None,
+                             true_buffer=sac_buffer,
+                             **sac_kwargs)
 
     wandb.init(project="Model-based Agent",
                dir='/cluster/scratch/' + ENTITY,
@@ -349,6 +357,7 @@ if __name__ == "__main__":
         optimizer=optimizer,
         reward_model=PendulumReward(),
         episode_length=horizon,
+        offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
         log_to_wandb=True,
