@@ -15,31 +15,31 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 @chex.dataclass
 class DynamicsParams(Generic[ModelState, DummyDynamicsParams]):
     key: chex.PRNGKey
-    model_state: StatisticalModelState[ModelState]
+    statistical_model_state: StatisticalModelState[ModelState]
 
 
 class LearnedDynamics(Dynamics, Generic[ModelState]):
     def __init__(self,
                  x_dim: int,
                  u_dim: int,
-                 model: StatisticalModel,
-                 include_noise: bool = True,
+                 statistical_model: StatisticalModel,
+                 aleatoric_noise_in_prediction: bool = True,
                  predict_difference: bool = True,
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
-        self.model = model
-        self.include_noise = include_noise
+        self.statistical_model = statistical_model
+        self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
         self.predict_difference = predict_difference
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
         return DynamicsParams(
             key=data_axis,
-            model_state=self.model.vmap_input_axis(data_axis=data_axis)
+            statistical_model_state=self.statistical_model.vmap_input_axis(data_axis=data_axis)
         )
 
     def vmap_output_axis(self, data_axis=0) -> tuple[int, DynamicsParams]:
         return (data_axis, DynamicsParams(key=data_axis,
-                                          model_state=self.model.vmap_input_axis(data_axis=data_axis)))
+                                          statistical_model_state=self.statistical_model.vmap_input_axis(data_axis=data_axis)))
 
     def next_state(self,
                    x: chex.Array,
@@ -50,23 +50,30 @@ class LearnedDynamics(Dynamics, Generic[ModelState]):
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         if self.predict_difference:
-            model_output = self.model(input=z, statistical_model_state=dynamics_params.model_state)
-            delta_x_dist = Normal(loc=model_output.mean, scale=model_output.epistemic_std)
+            model_output = self.statistical_model(input=z,
+                                                  statistical_model_state=dynamics_params.statistical_model_state)
+            scale_std = model_output.epistemic_std
+            delta_x_dist = Normal(loc=model_output.mean, scale=scale_std)
             delta_x = delta_x_dist.sample(seed=key_sample_x_next)
             x_next = x + delta_x
         else:
-            model_output = self.model(input=z, statistical_model_state=dynamics_params.model_state)
-            x_next_dist = Normal(loc=model_output.mean, scale=model_output.epistemic_std)
+            model_output = self.statistical_model(input=z,
+                                                  statistical_model_state=dynamics_params.statistical_model_state)
+            scale_std = model_output.epistemic_std
+            x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
             x_next = x_next_dist.sample(seed=key_sample_x_next)
 
         # Concatenate state and last num_frame_stack actions
-        new_dynamics_params = dynamics_params.replace(key=next_key, model_state=model_output.statistical_model_state)
-        return Normal(loc=x_next, scale=model_output.aleatoric_std), new_dynamics_params
+        new_dynamics_params = dynamics_params.replace(key=next_key, statistical_model_state=model_output.statistical_model_state)
+        aleatoric_std = model_output.aleatoric_std
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
     def init_params(self, key: chex.PRNGKey) -> DynamicsParams:
         param_key, model_state_key = jr.split(key, 2)
-        model_state = self.model.init(model_state_key)
-        return DynamicsParams(key=key, model_state=model_state)
+        model_state = self.statistical_model.init(model_state_key)
+        return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
 class OptimisticDynamics(LearnedDynamics, Generic[ModelState]):
@@ -83,15 +90,18 @@ class OptimisticDynamics(LearnedDynamics, Generic[ModelState]):
         z = jnp.concatenate([x, a])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         if self.predict_difference:
-            model_output = self.model(input=z, statistical_model_state=dynamics_params.model_state)
-            delta_x = model_output.mean + dynamics_params.model_state.beta * model_output.epistemic_std * eta
+            model_output = self.statistical_model(input=z,
+                                                  statistical_model_state=dynamics_params.statistical_model_state)
+            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
             x_next = x + delta_x
         else:
-            model_output = self.model(input=z, statistical_model_state=dynamics_params.model_state)
-            x_next = model_output.mean + dynamics_params.model_state.beta * model_output.epistemic_std * eta
+            model_output = self.statistical_model(input=z,
+                                                  statistical_model_state=dynamics_params.statistical_model_state)
+            x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
 
         # Concatenate state and last num_frame_stack actions
-        new_dynamics_params = dynamics_params.replace(key=next_key, model_state=model_output.statistical_model_state)
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
         return Normal(loc=x_next, scale=model_output.aleatoric_std), new_dynamics_params
 
 
@@ -122,7 +132,8 @@ class LearnedModelSystem(System, Generic[ModelState, RewardParams]):
         reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
         reward = reward_dist.sample(seed=reward_key)
         new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
-                                                   reward_params=new_reward_params, key=new_systems_key)
+                                                   reward_params=new_reward_params,
+                                                   key=new_systems_key)
         new_system_state = SystemState(
             x_next=x_next,
             reward=reward,
