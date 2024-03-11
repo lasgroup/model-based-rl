@@ -4,6 +4,7 @@ from functools import partial
 import chex
 import jax.numpy as jnp
 import jax.random as jr
+import wandb
 from brax.envs import Env as BraxEnv
 from brax.training.replay_buffers import UniformSamplingQueue, ReplayBufferState
 from brax.training.types import Transition
@@ -15,6 +16,7 @@ from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.base_systems import System
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
+from jax.nn import swish
 
 from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
 from mbrl.utils.brax_utils import EnvInteractor
@@ -178,6 +180,14 @@ class PetsModelBasedAgent(ABC):
         print(f'Start of data collection')
         agent_state = self.simulate_on_true_env(agent_state=agent_state)
         print(f'End of data collection')
+        print(f'Start with evaluation of the policy')
+        metrics = self.env_interactor.run_evaluation(optimizer=self.optimizer,
+                                                     optimizer_state=agent_state.optimizer_state)
+        if self.log_to_wandb:
+            wandb.log(metrics)
+        else:
+            print(metrics)
+        print(f'End with evaluation of the policy')
         return agent_state
 
     def run_episodes(self,
@@ -244,6 +254,8 @@ if __name__ == "__main__":
     from mbpo.optimizers import SACOptimizer
     from distrax import Normal
 
+    ENTITY = 'trevenl'
+
     env = PendulumEnv(reward_source='dm-control')
 
 
@@ -282,9 +294,37 @@ if __name__ == "__main__":
         num_particles=5,
         logging_wandb=False,
     )
+
     sac_kwargs = {
-        'num_timesteps': 20_000,
-        'episode_length': horizon,
+        'num_timesteps': 40_000,
+        'episode_length': 200,
+        'num_env_steps_between_updates': 20,
+        'num_envs': 32,
+        'num_eval_envs': 4,
+        'lr_alpha': 3e-4,
+        'lr_policy': 3e-4,
+        'lr_q': 3e-4,
+        'wd_alpha': 0.,
+        'wd_policy': 0.,
+        'wd_q': 0.,
+        'max_grad_norm': 1e5,
+        'discounting': 0.99,
+        'batch_size': 32,
+        'num_evals': 20,
+        'normalize_observations': True,
+        'reward_scaling': 1.,
+        'tau': 0.005,
+        'min_replay_size': 10 ** 4,
+        'max_replay_size': 10 ** 5,
+        'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
+        'deterministic_eval': True,
+        'init_log_alpha': 0.,
+        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_activation': swish,
+        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_activation': swish,
+        'wandb_logging': True,
+        'return_best_model': True,
     }
     max_replay_size_true_data_buffer = 10 ** 4
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
@@ -298,6 +338,10 @@ if __name__ == "__main__":
         sample_batch_size=1)
     optimizer = SACOptimizer(system=None, true_buffer=sac_buffer, **sac_kwargs)
 
+    wandb.init(project="Model-based Agent",
+               dir='/cluster/scratch/' + ENTITY,
+               )
+
     agent = PetsModelBasedAgent(
         env=env,
         eval_env=env,
@@ -306,9 +350,12 @@ if __name__ == "__main__":
         reward_model=PendulumReward(),
         episode_length=horizon,
         num_envs=1,
-        num_eval_envs=1
+        num_eval_envs=1,
+        log_to_wandb=True,
     )
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,
                                      key=jr.PRNGKey(0))
+
+    wandb.finish()
