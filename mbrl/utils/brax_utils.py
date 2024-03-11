@@ -1,25 +1,17 @@
+import time
+from functools import partial
+from typing import Sequence, Tuple
+
+import jax
+import jax.numpy as jnp
+import numpy as np
 from brax.envs import Env as BraxEnv
 from brax.envs import State
-from brax.training.types import Transition
 from brax.envs import training
 from brax.training.types import Metrics
-from typing import Sequence, Tuple
-import time
+from brax.training.types import Transition
+from jax import tree
 from mbpo.optimizers.base_optimizer import BaseOptimizer, OptimizerState
-import jax
-import numpy as np
-import jax.numpy as jnp
-from functools import partial
-
-
-def flatten_transitions(transition: Transition):
-    def convert_array(x: jax.Array):
-        if x.ndim == 3:
-            return x.reshape(-1, x.shape[-1])
-        else:
-            return x.reshape(-1)
-    new_transition = jax.tree_util.tree_map(lambda x: convert_array(x), transition)
-    return new_transition
 
 
 def env_step(
@@ -31,18 +23,16 @@ def env_step(
         evaluate: bool = False,
 ) -> Tuple[State, OptimizerState, Transition]:
     """Collect data."""
-    actions, new_optimizer_state = optimizer.act(env_state.obs, opt_state=optimizer_state, evaluate=evaluate)
-    nstate = env.step(env_state, actions)
-    state_extras = {x: nstate.info[x] for x in extra_fields}
-    return nstate, new_optimizer_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+    action, new_optimizer_state = optimizer.act(env_state.obs, opt_state=optimizer_state, evaluate=evaluate)
+    next_env_state = env.step(env_state, action)
+    state_extras = {x: next_env_state.info[x] for x in extra_fields}
+    return next_env_state, new_optimizer_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
-        action=actions,
-        reward=nstate.reward,
-        discount=1 - nstate.done,
-        next_observation=nstate.obs,
-        extras={
-            'state_extras': state_extras
-        })
+        action=action,
+        reward=next_env_state.reward,
+        discount=1 - next_env_state.done,  # TODO: why is discount equal to the 1 - done??
+        next_observation=next_env_state.obs,
+        extras={'state_extras': state_extras})
 
 
 def generate_unroll(
@@ -68,7 +58,7 @@ def generate_unroll(
     return final_state, final_opt_state, data
 
 
-class BraxEvaluator:
+class Evaluator:
     """Class to run evaluations."""
 
     def __init__(self, eval_env: BraxEnv,
@@ -147,7 +137,7 @@ class BraxEvaluator:
         return metrics  # pytype: disable=bad-return-type  # jax-ndarray
 
 
-class BraxEnvCollector:
+class EnvInteractor:
     def __init__(self,
                  env: BraxEnv,
                  key: jax.random.PRNGKey,
@@ -155,16 +145,12 @@ class BraxEnvCollector:
                  action_repeat: int = 1,
                  num_envs: int = 1,
                  num_eval_envs: int = 128,
-                 env_steps_per_update: int = 1,
-                 num_evals: int = 1,
                  eval_env: BraxEnv | None = None,
                  ):
         self.episode_length = episode_length
         self.action_repeat = action_repeat
         self.num_envs = num_envs
         self.num_eval_envs = num_eval_envs
-        self.env_steps_per_update = env_steps_per_update
-        self.num_evals = num_evals
         wrap_for_training = training.wrap
         self.env = wrap_for_training(
             env,
@@ -181,19 +167,18 @@ class BraxEnvCollector:
             action_repeat=self.action_repeat,
         )
 
-        self.evaluator = BraxEvaluator(
+        self.evaluator = Evaluator(
             eval_env,
             num_eval_envs=self.num_eval_envs,
             episode_length=self.episode_length,
             action_repeat=self.action_repeat,
             key=key)
 
-    def get_experience_brax(
-            self,
-            env_state: State,
-            opt_state: OptimizerState,
-            optimizer: BaseOptimizer,
-    ) -> Tuple[State, OptimizerState, Transition]:
+    def _make_one_env_step(self,
+                           env_state: State,
+                           opt_state: OptimizerState,
+                           optimizer: BaseOptimizer,
+                           ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
             self.env, env_state, optimizer, opt_state, extra_fields=(), evaluate=False)
         return env_state, new_opt_state, transitions
@@ -202,36 +187,37 @@ class BraxEnvCollector:
                           env_state: State,
                           optimizer_state: OptimizerState,
                           optimizer: BaseOptimizer,
-                          num_env_steps: int | None = None
-                          ):
-        def get_rollouts(carry, unused):
-            del unused
-            opt_state, env_state = carry[0], carry[1]
-            new_env_state, new_opt_state, transitions = self.get_experience_brax(
+                          unroll_length: int | None = None
+                          ) -> Tuple[State, OptimizerState, Transition]:
+        def get_rollouts(carry, _):
+            opt_state, env_state = carry
+            new_env_state, new_opt_state, transition = self._make_one_env_step(
                 env_state=env_state,
                 opt_state=opt_state,
                 optimizer=optimizer
             )
-            carry = [new_opt_state, new_env_state]
-            outs = transitions
+            carry = (new_opt_state, new_env_state)
+            outs = transition
             return carry, outs
 
-        if num_env_steps:
+        if unroll_length:
             carry, transitions = jax.lax.scan(
                 get_rollouts, [optimizer_state, env_state], (),
-                length=num_env_steps)
+                length=unroll_length)
         else:
             carry, transitions = jax.lax.scan(
-                get_rollouts, [optimizer_state, env_state], (),
-                length=self.env_steps_per_update)
-        new_optimizer_state, env_state = carry[0], carry[1]
-        return new_optimizer_state, env_state, flatten_transitions(transitions)
+                get_rollouts, (optimizer_state, env_state), (),
+                length=self.episode_length // self.action_repeat)
+        new_optimizer_state, env_state = carry
+        return env_state, new_optimizer_state, tree.map(jnp.concatenate, transitions)
 
-    def reset(self, env_key: jax.random.PRNGKey):
-        env_keys = jax.random.split(env_key, self.num_envs)
+    def reset(self, key: jax.random.PRNGKey) -> State:
+        env_keys = jax.random.split(key, self.num_envs)
         return self.env.reset(env_keys)
 
-    def run_evaluation(self, optimizer_state: OptimizerState, optimizer: BaseOptimizer) -> Metrics:
+    def run_evaluation(self,
+                       optimizer_state: OptimizerState,
+                       optimizer: BaseOptimizer) -> Metrics:
         return self.evaluator.run_evaluation(
             optimizer_state=optimizer_state,
             optimizer=optimizer,
