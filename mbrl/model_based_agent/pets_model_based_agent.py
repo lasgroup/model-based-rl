@@ -1,25 +1,25 @@
 from abc import ABC
-from typing import Generic, Union, Optional, Tuple
+from typing import Union, Optional, Tuple
+
+import chex
 import jax
-from gym import Env as GymEnv
+import jax.numpy as jnp
+import jax.random as jr
+import wandb
 from brax.envs import Env as BraxEnv
 from brax.envs import State
-import jax.numpy as jnp
-import chex
-from mbpo.utils.type_aliases import OptimizerState
-from mbpo.optimizers.base_optimizer import BaseOptimizer
-from bsm.statistical_model import StatisticalModel
-from bsm.utils.type_aliases import ModelState
-import jax.random as jr
 from brax.training.replay_buffers import UniformSamplingQueue, ReplayBufferState
 from brax.training.types import Transition
-from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+from bsm.statistical_model import StatisticalModel
 from bsm.utils.normalization import Data
-from functools import partial
+from gym import Env as GymEnv
+from mbpo.optimizers.base_optimizer import BaseOptimizer
+from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+from mbpo.utils.type_aliases import OptimizerState
+
+from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
+from mbrl.utils.brax_utils import EnvInteractor
 from mbrl.utils.training_utils import save_params, metrics_to_float
-from mbrl.utils.brax_utils import BraxEnvCollector
-import wandb
 
 
 @chex.dataclass
@@ -36,7 +36,7 @@ def _unpmap(v):
 class PetsModelBasedAgent(ABC):
     def __init__(self,
                  env: Union[BraxEnv, GymEnv],
-                 model: StatisticalModel,
+                 statistical_model: StatisticalModel,
                  reward_model: Reward,
                  optimizer: BaseOptimizer,
                  episode_length: int,
@@ -45,7 +45,7 @@ class PetsModelBasedAgent(ABC):
                  num_eval_envs: int = 128,
                  env_steps_per_update: int = 1,
                  num_evals: int = 1,
-                 offline_data: Transition = None,
+                 offline_data: Transition | None = None,
                  predict_difference: bool = True,
                  reset_bnn: bool = True,
                  return_best_bnn: bool = True,
@@ -59,7 +59,7 @@ class PetsModelBasedAgent(ABC):
                  log_to_wandb: bool = False,
                  return_best_agent: bool = False
                  ):
-        self.model = model
+        self.model = statistical_model
         self.reward_model = reward_model
         self.optimizer = optimizer
         self.bnn_training_test_ratio = bnn_training_test_ratio
@@ -103,7 +103,7 @@ class PetsModelBasedAgent(ABC):
             max_replay_size=max_replay_size_true_data_buffer,  # Should be larger than the number of episodes we run
             dummy_data_sample=self.dummy_sample,
             sample_batch_size=1)
-        self.dynamics = LearnedDynamics(model=self.model, x_dim=self.state_dim, u_dim=self.action_dim)
+        self.dynamics = LearnedDynamics(statistical_model=self.model, x_dim=self.state_dim, u_dim=self.action_dim)
         self.system = LearnedModelSystem(
             dynamics=self.dynamics,
             reward=self.reward_model,
@@ -117,7 +117,7 @@ class PetsModelBasedAgent(ABC):
         self.key, data_collector_key = jax.random.split(self.key)
         if isinstance(env, BraxEnv):
             assert isinstance(eval_env, BraxEnv), "Evaluation env must be of the same type as the training env."
-            self.data_collector = BraxEnvCollector(
+            self.data_collector = EnvInteractor(
                 env=env,
                 key=data_collector_key,
                 episode_length=episode_length,
@@ -129,7 +129,7 @@ class PetsModelBasedAgent(ABC):
                 eval_env=eval_env,
             )
         else:
-            self.data_collector = BraxEnvCollector(
+            self.data_collector = EnvInteractor(
                 env=env,
                 key=data_collector_key,
                 episode_length=episode_length,
@@ -217,16 +217,12 @@ class PetsModelBasedAgent(ABC):
                 'No training will happen because min_replay_size >= num_timesteps')
 
         env_steps_per_actor_step = self.data_collector.env_steps_per_actor_step
-        # equals to ceil(min_replay_size / env_steps_per_actor_step)
         num_prefill_actor_steps = -(-self.min_replay_size // self.data_collector.num_envs)
 
         num_prefill_env_steps = num_prefill_actor_steps * env_steps_per_actor_step
         assert num_timesteps - num_prefill_env_steps >= 0
         num_evals_after_init = max(self.data_collector.num_evals - 1, 1)
 
-        # num_training_steps_per_epoch = -(
-        #        -(num_timesteps - num_prefill_env_steps) //
-        #        (num_evals_after_init * env_steps_per_actor_step))
         num_training_steps = -(
                 -(num_timesteps - num_prefill_env_steps) // env_steps_per_actor_step)
 
@@ -263,7 +259,7 @@ class PetsModelBasedAgent(ABC):
                 env_state=env_state,
                 optimizer_state=agent_state.optimizer_state,
                 optimizer=self.optimizer,
-                num_env_steps=num_prefill_env_steps,
+                unroll_length=num_prefill_env_steps,
             )
 
             buffer_state = agent_state.buffer_state
@@ -275,24 +271,6 @@ class PetsModelBasedAgent(ABC):
                 optimizer_state=new_optimizer_state,
             )
             return new_agent_state, env_state
-
-        # prefill_replay_buffer = jax.vmap(
-        #    prefill_replay_buffer, in_axes=(None, 0))
-
-        # def training_epoch(
-        #       agent_state: ModelBasedAgentState, env_state: State
-        #) -> Tuple[ModelBasedAgentState, State]:
-
-        #    def f(carry: Tuple[ModelBasedAgentState, State], unused_t):
-        #        del unused_t
-        #        ags, es = carry
-        #        nags, es = training_step(ags, es)
-        #        return (nags, es), ()
-
-        #    (new_agent_state, env_state), _ = jax.lax.scan(
-        #        f, (agent_state, env_state), (),
-        #        length=num_training_steps_per_epoch)
-        #    return new_agent_state, env_state
 
         # Training state init
 
@@ -385,6 +363,8 @@ if __name__ == '__main__':
     from distrax import Normal
 
     env = Pendulum()
+
+
     class PendulumReward(Reward):
         def __init__(self):
             super().__init__(x_dim=2, u_dim=1)
@@ -434,7 +414,7 @@ if __name__ == '__main__':
 
     agent = PetsModelBasedAgent(
         env=env,
-        model=model,
+        statistical_model=model,
         optimizer=optimizer,
         reward_model=PendulumReward(),
         episode_length=horizon,
