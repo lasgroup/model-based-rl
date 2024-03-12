@@ -74,6 +74,10 @@ def experiment(project_name: str = 'GPUSpeedTest',
         features=(64, 64, 64),
         num_particles=5,
         logging_wandb=True,
+        return_best_model=True,
+        eval_batch_size=64,
+        train_share=0.8,
+        eval_frequency=5_000,
     )
 
     sac_kwargs = {

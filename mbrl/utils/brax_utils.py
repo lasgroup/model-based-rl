@@ -10,7 +10,7 @@ from brax.envs import State
 from brax.envs import training
 from brax.training.types import Metrics
 from brax.training.types import Transition
-from jax import tree
+import jax.tree_util as jtu
 from mbpo.optimizers.base_optimizer import BaseOptimizer, OptimizerState
 
 
@@ -213,7 +213,7 @@ class EnvInteractor:
                 get_rollouts, (optimizer_state, env_state), (),
                 length=self.episode_length // self.action_repeat)
         new_optimizer_state, env_state = carry
-        return env_state, new_optimizer_state, tree.map(jnp.concatenate, transitions)
+        return env_state, new_optimizer_state, jtu.tree_map(jnp.concatenate, transitions)
 
     def reset(self, key: jax.random.PRNGKey) -> State:
         env_keys = jax.random.split(key, self.num_envs)
