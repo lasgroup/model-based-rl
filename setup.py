@@ -3,6 +3,7 @@
 from setuptools import setup, find_packages
 
 required = [
+    'pandas',
     'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git',
     'bsm @ git+https://github.com/lasgroup/bayesian_statistical_models.git',
 ]
