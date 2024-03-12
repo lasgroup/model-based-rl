@@ -48,6 +48,7 @@ class PetsModelBasedAgent(ABC):
                  reset_statistical_model: bool = True,
                  key: chex.PRNGKey = jr.PRNGKey(0),
                  log_to_wandb: bool = False,
+                 deterministic_policy_for_data_collection: bool = False,
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -65,6 +66,7 @@ class PetsModelBasedAgent(ABC):
         self.reset_statistical_model = reset_statistical_model
         self.key = key
         self.log_to_wandb = log_to_wandb
+        self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
 
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(env=self.env,
@@ -73,7 +75,8 @@ class PetsModelBasedAgent(ABC):
                                             num_eval_envs=self.num_eval_envs,
                                             episode_length=self.episode_length,
                                             action_repeat=self.action_repeat,
-                                            key=subkey)
+                                            key=subkey,
+                                            deterministic_policy_for_data_collection=deterministic_policy_for_data_collection)
 
         self.collected_data_buffer = self.prepare_data_buffers()
         self.learned_system = self.prepare_learned_system()
@@ -287,24 +290,26 @@ if __name__ == "__main__":
 
     offline_data_gen = PendulumOfflineData()
     key = jr.PRNGKey(0)
-    offline_data = offline_data_gen.sample_transitions(key=key, num_samples=10_000)
+
+    offline_data = offline_data_gen.sample_transitions(key=key,
+                                                       num_samples=100)
 
     horizon = 200
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
         output_dim=env.observation_size,
         num_training_steps=50_000,
-        output_stds=0.01 * jnp.ones(env.observation_size),
+        output_stds=1e-3 * jnp.ones(env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
         logging_wandb=True,
     )
 
     sac_kwargs = {
-        'num_timesteps': 40_000,
-        'episode_length': 200,
+        'num_timesteps': 1_000_000,
+        'episode_length': 64,
         'num_env_steps_between_updates': 20,
-        'num_envs': 32,
+        'num_envs': 64,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -342,6 +347,7 @@ if __name__ == "__main__":
         max_replay_size=max_replay_size_true_data_buffer,
         dummy_data_sample=dummy_sample,
         sample_batch_size=1)
+
     optimizer = SACOptimizer(system=None,
                              true_buffer=sac_buffer,
                              **sac_kwargs)
