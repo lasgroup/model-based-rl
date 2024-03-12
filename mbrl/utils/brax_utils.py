@@ -145,12 +145,14 @@ class EnvInteractor:
                  action_repeat: int = 1,
                  num_envs: int = 1,
                  num_eval_envs: int = 128,
+                 deterministic_policy_for_data_collection: bool = True,
                  eval_env: BraxEnv | None = None,
                  ):
         self.episode_length = episode_length
         self.action_repeat = action_repeat
         self.num_envs = num_envs
         self.num_eval_envs = num_eval_envs
+        self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
         wrap_for_training = training.wrap
         self.env = wrap_for_training(
             env,
@@ -180,7 +182,9 @@ class EnvInteractor:
                            optimizer: BaseOptimizer,
                            ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
-            self.env, env_state, optimizer, opt_state, extra_fields=(), evaluate=False)
+            self.env, env_state, optimizer, opt_state,
+            extra_fields=(),
+            evaluate=self.deterministic_policy_for_data_collection)
         return env_state, new_opt_state, transitions
 
     def generate_rollouts(self,
