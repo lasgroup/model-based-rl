@@ -14,11 +14,11 @@ from bsm.utils.normalization import Data
 from jax import jit
 from jax.nn import swish
 from mbpo.optimizers.base_optimizer import BaseOptimizer
-from mbpo.systems.base_systems import System
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
 
-from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
+from mbrl.model_based_agent.optimizer_wrapper import Actor
+from mbrl.model_based_agent.prepare_dynamics_system_and_actor import prepare_dynamics_system_actor
 from mbrl.utils.brax_utils import EnvInteractor
 
 
@@ -29,13 +29,14 @@ class ModelBasedAgentState:
     key: chex.Array
 
 
-class PetsModelBasedAgent(ABC):
+class ModelBasedAgent(ABC):
 
     def __init__(self,
                  env: BraxEnv,
                  statistical_model: StatisticalModel,
                  reward_model: Reward,
                  optimizer: BaseOptimizer,
+                 learning_style: str,
                  episode_length: int,
                  eval_env: BraxEnv,
                  num_envs: int = 1,
@@ -53,7 +54,7 @@ class PetsModelBasedAgent(ABC):
         self.env = env
         self.statistical_model = statistical_model
         self.reward_model = reward_model
-        self.optimizer = optimizer
+        self.learning_style = learning_style
         self.episode_length = episode_length
         self.eval_env = eval_env
         self.num_envs = num_envs
@@ -79,8 +80,7 @@ class PetsModelBasedAgent(ABC):
                                             deterministic_policy_for_data_collection=deterministic_policy_for_data_collection)
 
         self.collected_data_buffer = self.prepare_data_buffers()
-        self.learned_system = self.prepare_learned_system()
-        self.optimizer.set_system(system=self.learned_system)
+        self.actor = self.prepare_actor(self.learning_style, optimizer)
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
@@ -100,19 +100,27 @@ class PetsModelBasedAgent(ABC):
     def init(self, key: chex.Array):
         key_state, key_data_buffers, key_optimizer = jr.split(key, 3)
         collected_data_buffer_state = self._init_data_buffer_states(key_data_buffers)
-        init_optimizer_state = self.optimizer.init(key=key_optimizer,
-                                                   true_buffer_state=collected_data_buffer_state)
+        init_optimizer_state = self.actor.init(key=key_optimizer,
+                                               true_buffer_state=collected_data_buffer_state)
         return ModelBasedAgentState(optimizer_state=init_optimizer_state,
                                     env_steps=0,
                                     key=key_state)
 
-    def prepare_learned_system(self) -> System:
-        learned_dynamics = LearnedDynamics(statistical_model=self.statistical_model,
-                                           x_dim=self.env.observation_size,
-                                           u_dim=self.env.action_size)
-        system = LearnedModelSystem(dynamics=learned_dynamics,
-                                    reward=self.reward_model, )
-        return system
+    def prepare_actor(self,
+                      learning_style: str,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = prepare_dynamics_system_actor(learning_style)
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
 
     def train_policy(self,
                      agent_state: ModelBasedAgentState,
@@ -120,7 +128,7 @@ class PetsModelBasedAgent(ABC):
         optimizer_state = agent_state.optimizer_state
         # TODO: here we always start training the optimizer from scratch, we might want to just continue training after
         #  the data buffer surpasses certain margin
-        optimizer_output = self.optimizer.train(opt_state=optimizer_state)
+        optimizer_output = self.actor.train(opt_state=optimizer_state)
         new_agent_state = agent_state.replace(optimizer_state=optimizer_output.optimizer_state)
         return new_agent_state
 
@@ -153,8 +161,8 @@ class PetsModelBasedAgent(ABC):
         env_state = self.env_interactor.reset(key=key_reset)
         optimizer_state = agent_state.optimizer_state
         interaction = self.env_interactor.generate_rollouts(env_state=env_state,
-                                                            optimizer_state=optimizer_state,
-                                                            optimizer=self.optimizer
+                                                            actor_state=optimizer_state,
+                                                            actor=self.actor
                                                             )
         final_state, optimizer_state, transitions = interaction
         collected_data_buffer_state = agent_state.optimizer_state.true_buffer_state
@@ -184,8 +192,8 @@ class PetsModelBasedAgent(ABC):
         agent_state = self.simulate_on_true_env(agent_state=agent_state)
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
-        metrics = self.env_interactor.run_evaluation(optimizer=self.optimizer,
-                                                     optimizer_state=agent_state.optimizer_state)
+        metrics = self.env_interactor.run_evaluation(actor=self.actor,
+                                                     actor_state=agent_state.optimizer_state)
         if self.log_to_wandb:
             wandb.log(metrics)
         else:
@@ -298,18 +306,22 @@ if __name__ == "__main__":
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
         output_dim=env.observation_size,
-        num_training_steps=50_000,
+        num_training_steps=3_000,
         output_stds=1e-3 * jnp.ones(env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
         logging_wandb=True,
+        return_best_model=True,
+        eval_batch_size=64,
+        train_share=0.8,
+        eval_frequency=1_000,
     )
 
     sac_kwargs = {
-        'num_timesteps': 1_000_000,
+        'num_timesteps': 20_000,
         'episode_length': 64,
-        'num_env_steps_between_updates': 20,
-        'num_envs': 64,
+        'num_env_steps_between_updates': 10,
+        'num_envs': 16,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -326,12 +338,12 @@ if __name__ == "__main__":
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': 10 * 16,  # should be num_envs * num_env_steps_between_updates
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_hidden_layer_sizes': (64, 64),
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_hidden_layer_sizes': (64, 64),
         'critic_activation': swish,
         'wandb_logging': True,
         'return_best_model': True,
@@ -356,11 +368,12 @@ if __name__ == "__main__":
                dir='/cluster/scratch/' + ENTITY,
                )
 
-    agent = PetsModelBasedAgent(
+    agent = ModelBasedAgent(
         env=env,
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
+        learning_style='Optimistic',
         reward_model=PendulumReward(),
         episode_length=horizon,
         offline_data=offline_data,
