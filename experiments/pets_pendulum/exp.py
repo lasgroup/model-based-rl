@@ -13,7 +13,7 @@ from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
 from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent.model_based_pets import PetsModelBasedAgent
+from mbrl.model_based_agent.model_based import ModelBasedAgent
 from mbrl.utils.offline_data import PendulumOfflineData
 
 ENTITY = 'trevenl'
@@ -132,7 +132,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                config=config
                )
 
-    agent = PetsModelBasedAgent(
+    agent = ModelBasedAgent(
         env=env,
         eval_env=env,
         statistical_model=model,
