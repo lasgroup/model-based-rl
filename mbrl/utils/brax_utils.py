@@ -11,22 +11,23 @@ from brax.envs import training
 from brax.training.types import Metrics
 from brax.training.types import Transition
 import jax.tree_util as jtu
-from mbpo.optimizers.base_optimizer import BaseOptimizer, OptimizerState
+from mbpo.optimizers.base_optimizer import OptimizerState
+from mbrl.model_based_agent.optimizer_wrapper import Actor
 
 
 def env_step(
         env: BraxEnv,
         env_state: State,
-        optimizer: BaseOptimizer,
-        optimizer_state: OptimizerState,
+        actor: Actor,
+        actor_state: OptimizerState,
         extra_fields: Sequence[str] = (),
         evaluate: bool = False,
 ) -> Tuple[State, OptimizerState, Transition]:
     """Collect data."""
-    action, new_optimizer_state = optimizer.act(env_state.obs, opt_state=optimizer_state, evaluate=evaluate)
+    action, new_actor_state = actor.act(env_state.obs, opt_state=actor_state, evaluate=evaluate)
     next_env_state = env.step(env_state, action)
     state_extras = {x: next_env_state.info[x] for x in extra_fields}
-    return next_env_state, new_optimizer_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+    return next_env_state, new_actor_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=action,
         reward=next_env_state.reward,
@@ -38,8 +39,8 @@ def env_step(
 def generate_unroll(
         env: BraxEnv,
         env_state: State,
-        optimizer: BaseOptimizer,
-        optimizer_state: OptimizerState,
+        actor: Actor,
+        actor_state: OptimizerState,
         unroll_length: int,
         extra_fields: Sequence[str] = (),
         evaluate: bool = False,
@@ -50,11 +51,11 @@ def generate_unroll(
     def f(carry, unused_t):
         state, opt_state = carry
         nstate, new_opt_state, transition = env_step(
-            env, state, optimizer, opt_state, extra_fields=extra_fields, evaluate=evaluate)
+            env, state, actor, opt_state, extra_fields=extra_fields, evaluate=evaluate)
         return (nstate, new_opt_state), transition
 
     (final_state, final_opt_state), data = jax.lax.scan(
-        f, (env_state, optimizer_state), (), length=unroll_length)
+        f, (env_state, actor_state), (), length=unroll_length)
     return final_state, final_opt_state, data
 
 
@@ -88,29 +89,29 @@ class Evaluator:
     @partial(jax.jit, static_argnums=(0, 2))
     def generate_eval_unroll(self,
                              opt_state: OptimizerState,
-                             optimizer: BaseOptimizer,
+                             actor: Actor,
                              rng: jax.random.PRNGKey) -> State:
         reset_keys = jax.random.split(rng, self.num_eval_envs)
         eval_first_state = self.eval_env.reset(reset_keys)
         state = generate_unroll(
             env=self.eval_env,
             env_state=eval_first_state,
-            optimizer=optimizer,
-            optimizer_state=opt_state,
+            actor=actor,
+            actor_state=opt_state,
             unroll_length=self.episode_length // self.action_repeat,
             evaluate=True)[0]
         return state
 
     def run_evaluation(self,
-                       optimizer_state: OptimizerState,
-                       optimizer: BaseOptimizer,
+                       actor_state: OptimizerState,
+                       actor: Actor,
                        aggregate_episodes: bool = True) -> Metrics:
         """Run one epoch of evaluation."""
         self._key, unroll_key, opt_key = jax.random.split(self._key, 3)
-        eval_opt_state = optimizer_state.replace(key=opt_key)
+        eval_opt_state = actor_state.replace(key=opt_key)
 
         t = time.time()
-        eval_state = self.generate_eval_unroll(eval_opt_state, optimizer, unroll_key)
+        eval_state = self.generate_eval_unroll(eval_opt_state, actor, unroll_key)
         eval_metrics = eval_state.info['eval_metrics']
         eval_metrics.active_episodes.block_until_ready()
         epoch_eval_time = time.time() - t
@@ -179,18 +180,18 @@ class EnvInteractor:
     def _make_one_env_step(self,
                            env_state: State,
                            opt_state: OptimizerState,
-                           optimizer: BaseOptimizer,
+                           actor: Actor,
                            ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
-            self.env, env_state, optimizer, opt_state,
+            self.env, env_state, actor, opt_state,
             extra_fields=(),
             evaluate=self.deterministic_policy_for_data_collection)
         return env_state, new_opt_state, transitions
 
     def generate_rollouts(self,
                           env_state: State,
-                          optimizer_state: OptimizerState,
-                          optimizer: BaseOptimizer,
+                          actor_state: OptimizerState,
+                          actor: Actor,
                           unroll_length: int | None = None
                           ) -> Tuple[State, OptimizerState, Transition]:
         def get_rollouts(carry, _):
@@ -198,7 +199,7 @@ class EnvInteractor:
             new_env_state, new_opt_state, transition = self._make_one_env_step(
                 env_state=env_state,
                 opt_state=opt_state,
-                optimizer=optimizer
+                actor=actor
             )
             carry = (new_opt_state, new_env_state)
             outs = transition
@@ -206,25 +207,25 @@ class EnvInteractor:
 
         if unroll_length:
             carry, transitions = jax.lax.scan(
-                get_rollouts, [optimizer_state, env_state], (),
+                get_rollouts, [actor_state, env_state], (),
                 length=unroll_length)
         else:
             carry, transitions = jax.lax.scan(
-                get_rollouts, (optimizer_state, env_state), (),
+                get_rollouts, (actor_state, env_state), (),
                 length=self.episode_length // self.action_repeat)
-        new_optimizer_state, env_state = carry
-        return env_state, new_optimizer_state, jtu.tree_map(jnp.concatenate, transitions)
+        new_actor_state, env_state = carry
+        return env_state, new_actor_state, jtu.tree_map(jnp.concatenate, transitions)
 
     def reset(self, key: jax.random.PRNGKey) -> State:
         env_keys = jax.random.split(key, self.num_envs)
         return self.env.reset(env_keys)
 
     def run_evaluation(self,
-                       optimizer_state: OptimizerState,
-                       optimizer: BaseOptimizer) -> Metrics:
+                       actor_state: OptimizerState,
+                       actor: Actor) -> Metrics:
         return self.evaluator.run_evaluation(
-            optimizer_state=optimizer_state,
-            optimizer=optimizer,
+            actor_state=actor_state,
+            actor=actor,
         )
 
     @property
