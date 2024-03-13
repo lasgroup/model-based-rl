@@ -17,7 +17,7 @@ from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
 
-from mbrl.model_based_agent.system_wrapper import LearnedModelSystem, LearnedDynamics
+from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics
 from mbrl.utils.brax_utils import EnvInteractor
 from mbrl.utils.training_utils import save_params, metrics_to_float
 
@@ -103,8 +103,8 @@ class PetsModelBasedAgent(ABC):
             max_replay_size=max_replay_size_true_data_buffer,  # Should be larger than the number of episodes we run
             dummy_data_sample=self.dummy_sample,
             sample_batch_size=1)
-        self.dynamics = LearnedDynamics(statistical_model=self.model, x_dim=self.state_dim, u_dim=self.action_dim)
-        self.system = LearnedModelSystem(
+        self.dynamics = PetsDynamics(statistical_model=self.model, x_dim=self.state_dim, u_dim=self.action_dim)
+        self.system = PetsSystem(
             dynamics=self.dynamics,
             reward=self.reward_model,
         )
@@ -234,8 +234,8 @@ class PetsModelBasedAgent(ABC):
         ) -> Tuple[ModelBasedAgentState, State]:
             new_optimizer_state, env_state, transitions = self.data_collector.generate_rollouts(
                 env_state=env_state,
-                optimizer_state=agent_state.optimizer_state,
-                optimizer=self.optimizer,
+                actor_state=agent_state.optimizer_state,
+                actor=self.optimizer,
             )
 
             buffer_state = agent_state.buffer_state
@@ -257,8 +257,8 @@ class PetsModelBasedAgent(ABC):
 
             new_optimizer_state, env_state, transitions = self.data_collector.generate_rollouts(
                 env_state=env_state,
-                optimizer_state=agent_state.optimizer_state,
-                optimizer=self.optimizer,
+                actor_state=agent_state.optimizer_state,
+                actor=self.optimizer,
                 unroll_length=num_prefill_env_steps,
             )
 
