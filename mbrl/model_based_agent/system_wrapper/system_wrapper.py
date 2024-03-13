@@ -18,7 +18,7 @@ class DynamicsParams(Generic[ModelState, DummyDynamicsParams]):
     statistical_model_state: StatisticalModelState[ModelState]
 
 
-class LearnedDynamics(Dynamics, Generic[ModelState]):
+class PetsDynamics(Dynamics, Generic[ModelState]):
     def __init__(self,
                  x_dim: int,
                  u_dim: int,
@@ -39,7 +39,8 @@ class LearnedDynamics(Dynamics, Generic[ModelState]):
 
     def vmap_output_axis(self, data_axis=0) -> tuple[int, DynamicsParams]:
         return (data_axis, DynamicsParams(key=data_axis,
-                                          statistical_model_state=self.statistical_model.vmap_input_axis(data_axis=data_axis)))
+                                          statistical_model_state=self.statistical_model.vmap_input_axis(
+                                              data_axis=data_axis)))
 
     def next_state(self,
                    x: chex.Array,
@@ -64,7 +65,8 @@ class LearnedDynamics(Dynamics, Generic[ModelState]):
             x_next = x_next_dist.sample(seed=key_sample_x_next)
 
         # Concatenate state and last num_frame_stack actions
-        new_dynamics_params = dynamics_params.replace(key=next_key, statistical_model_state=model_output.statistical_model_state)
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
         aleatoric_std = model_output.aleatoric_std
         if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
@@ -76,17 +78,18 @@ class LearnedDynamics(Dynamics, Generic[ModelState]):
         return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
-class OptimisticDynamics(LearnedDynamics, Generic[ModelState]):
+class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.u_dim = self.x_dim + self.u_dim
 
     def next_state(self,
                    x: chex.Array,
                    u: chex.Array,
                    dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
-        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim + self.x_dim,)
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
         # Create state-action pair
-        a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim])
+        a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
         z = jnp.concatenate([x, a])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         if self.predict_difference:
@@ -105,8 +108,8 @@ class OptimisticDynamics(LearnedDynamics, Generic[ModelState]):
         return Normal(loc=x_next, scale=model_output.aleatoric_std), new_dynamics_params
 
 
-class LearnedModelSystem(System, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: LearnedDynamics[ModelState], reward: Reward[RewardParams]):
+class PetsSystem(System, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: PetsDynamics[ModelState], reward: Reward[RewardParams]):
         super().__init__(dynamics, reward)
         self.dynamics = dynamics
         self.reward = reward
@@ -159,3 +162,38 @@ class LearnedModelSystem(System, Generic[ModelState, RewardParams]):
 
     def system_params_vmap_axes(self, axes: int = 0):
         return self.vmap_input_axis(data_axis=axes)
+
+
+class OptimisticSystem(PetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: OptimisticDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: SystemParams[ModelState, RewardParams],
+             ) -> SystemState:
+        """
+
+        :param x: current state of the system
+        :param u: current augmented action of the system
+        :param system_params: parameters of the system
+        :return: Tuple of next state, reward, updated system parameters
+        """
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
+        next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
+        x_next = x_next_dist.sample(seed=next_state_key)
+        reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim],
+                                                     system_params.reward_params, x_next)
+        reward = reward_dist.sample(seed=reward_key)
+        new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
+                                                   reward_params=new_reward_params,
+                                                   key=new_systems_key)
+        new_system_state = SystemState(
+            x_next=x_next,
+            reward=reward,
+            system_params=new_systems_params,
+            done=jnp.array(0.0),
+        )
+        return new_system_state
