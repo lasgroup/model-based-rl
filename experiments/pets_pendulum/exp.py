@@ -20,7 +20,7 @@ ENTITY = 'trevenl'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
-               num_offline_samples: int | None = None,
+               num_offline_samples: int = 100,
                sac_horizon: int = 100,
                deterministic_policy_for_data_collection: bool = False
                ):
@@ -59,7 +59,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     offline_data_gen = PendulumOfflineData()
     key = jr.PRNGKey(0)
 
-    if num_offline_samples:
+    if num_offline_samples > 0:
         offline_data = offline_data_gen.sample_transitions(key=key,
                                                            num_samples=num_offline_samples)
     else:
@@ -154,11 +154,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
 
 def main(args):
-    num_offline_samples = args.num_offline_samples
-    if num_offline_samples == 0:
-        num_offline_samples = None
     experiment(project_name=args.project_name,
-               num_offline_samples=num_offline_samples,
+               num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection))
 
