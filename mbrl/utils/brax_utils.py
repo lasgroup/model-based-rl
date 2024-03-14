@@ -23,7 +23,12 @@ def env_step(
         extra_fields: Sequence[str] = (),
         evaluate: bool = False,
 ) -> Tuple[State, OptimizerState, Transition]:
-    """Collect data."""
+    """Collect data.
+
+    Note: discount = 1 - next_env_state.done because true environment has no discounting. At terminal state s_T
+    we have V(s_T) = r(s_T, a) instead of the typical V(s) = r(s, a) + discount * V(s')
+    Setting discount = 1 - done gives the desired behavior.
+    """
     action, new_actor_state = actor.act(env_state.obs, opt_state=actor_state, evaluate=evaluate)
     next_env_state = env.step(env_state, action)
     state_extras = {x: next_env_state.info[x] for x in extra_fields}
@@ -31,7 +36,7 @@ def env_step(
         observation=env_state.obs,
         action=action,
         reward=next_env_state.reward,
-        discount=1 - next_env_state.done,  # TODO: why is discount equal to the 1 - done??
+        discount=1 - next_env_state.done,
         next_observation=next_env_state.obs,
         extras={'state_extras': state_extras})
 
@@ -62,7 +67,8 @@ def generate_unroll(
 class Evaluator:
     """Class to run evaluations."""
 
-    def __init__(self, eval_env: BraxEnv,
+    def __init__(self,
+                 eval_env: BraxEnv,
                  num_eval_envs: int,
                  episode_length: int,
                  action_repeat: int,
@@ -71,14 +77,13 @@ class Evaluator:
 
     Args:
       eval_env: Batched environment to run evals on.
-      eval_policy_fn: Function returning the policy from the policy parameters.
       num_eval_envs: Each env will run 1 episode in parallel for each eval.
       episode_length: Maximum length of an episode.
       action_repeat: Number of physics steps per env step.
       key: RNG key.
     """
         self._key = key
-        self._eval_walltime = 0.
+        self._eval_wall_time = 0.
 
         self.eval_env = training.EvalWrapper(eval_env)
         self.num_eval_envs = num_eval_envs
@@ -129,9 +134,9 @@ class Evaluator:
         metrics['eval_true_env/avg_episode_length'] = np.mean(eval_metrics.episode_steps)
         metrics['eval_true_env/epoch_eval_time'] = epoch_eval_time
         metrics['eval_true_env/sps'] = self._steps_per_unroll / epoch_eval_time
-        self._eval_walltime = self._eval_walltime + epoch_eval_time
+        self._eval_wall_time = self._eval_wall_time + epoch_eval_time
         metrics = {
-            'eval_true_env/walltime': self._eval_walltime,
+            'eval_true_env/wall_time': self._eval_wall_time,
             **metrics
         }
 
@@ -207,7 +212,7 @@ class EnvInteractor:
 
         if unroll_length:
             carry, transitions = jax.lax.scan(
-                get_rollouts, [actor_state, env_state], (),
+                get_rollouts, (actor_state, env_state), (),
                 length=unroll_length)
         else:
             carry, transitions = jax.lax.scan(

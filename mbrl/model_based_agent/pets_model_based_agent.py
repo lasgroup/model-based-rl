@@ -1,40 +1,49 @@
-import argparse
-
-import chex
-import jax.numpy as jnp
-import jax.random as jr
-import wandb
-from brax.training.replay_buffers import UniformSamplingQueue
-from brax.training.types import Transition
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from distrax import Normal
-from jax.nn import swish
-from mbpo.optimizers import SACOptimizer
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
-from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent.optimistic_model_based_agent import OptimisticModelBasedAgent
-from mbrl.utils.offline_data import PendulumOfflineData
-
-ENTITY = 'trevenl'
+from .base_model_based_agent import BaseModelBasedAgent
+from mbpo.optimizers.base_optimizer import BaseOptimizer
+from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
+from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics
 
 
-def experiment(project_name: str = 'GPUSpeedTest',
-               num_offline_samples: int = 100,
-               sac_horizon: int = 100,
-               deterministic_policy_for_data_collection: bool = False,
-               train_steps_sac: int = 1_000_000,
-               train_steps_bnn: int = 50_000,
-               ):
-    config = dict(num_offline_samples=num_offline_samples,
-                  sac_horizon=sac_horizon,
-                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-                  train_steps_sac=train_steps_sac,
-                  train_steps_bnn=train_steps_bnn,
-                  )
+class PETSModelBasedAgent(BaseModelBasedAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = PetsDynamics, PetsSystem, PetsActor
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
+
+
+if __name__ == "__main__":
+    from mbrl.envs.pendulum import PendulumEnv
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from mbpo.optimizers import SACOptimizer
+    from distrax import Normal
+    from mbrl.utils.offline_data import PendulumOfflineData
+
+    import chex
+    import jax.numpy as jnp
+    import jax.random as jr
+    from brax.training.replay_buffers import UniformSamplingQueue
+    from brax.training.types import Transition
+    from jax.nn import swish
+    from mbpo.optimizers.base_optimizer import BaseOptimizer
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+
+    from mbrl.model_based_agent.optimizer_wrapper import Actor
 
     env = PendulumEnv(reward_source='dm-control')
+
 
     class PendulumReward(Reward):
         def __init__(self):
@@ -60,20 +69,18 @@ def experiment(project_name: str = 'GPUSpeedTest',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
+
     offline_data_gen = PendulumOfflineData()
     key = jr.PRNGKey(0)
 
-    if num_offline_samples > 0:
-        offline_data = offline_data_gen.sample_transitions(key=key,
-                                                           num_samples=num_offline_samples)
-    else:
-        offline_data = None
+    offline_data = offline_data_gen.sample_transitions(key=key,
+                                                       num_samples=100)
 
     horizon = 200
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
         output_dim=env.observation_size,
-        num_training_steps=train_steps_bnn,
+        num_training_steps=3_000,
         output_stds=1e-3 * jnp.ones(env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
@@ -81,14 +88,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
-        eval_frequency=5_000,
+        eval_frequency=1_000,
     )
 
     sac_kwargs = {
-        'num_timesteps': train_steps_sac,
-        'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 20,
-        'num_envs': 64,
+        'num_timesteps': 20_000,
+        'episode_length': 64,
+        'num_env_steps_between_updates': 10,
+        'num_envs': 16,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -105,12 +112,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': 10 * 16,  # should be num_envs * num_env_steps_between_updates
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_hidden_layer_sizes': (64, 64),
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_hidden_layer_sizes': (64, 64),
         'critic_activation': swish,
         'wandb_logging': True,
         'return_best_model': True,
@@ -131,49 +138,20 @@ def experiment(project_name: str = 'GPUSpeedTest',
                              true_buffer=sac_buffer,
                              **sac_kwargs)
 
-    wandb.init(project=project_name,
-               dir='/cluster/scratch/' + ENTITY,
-               config=config
-               )
-
-    agent = OptimisticModelBasedAgent(
+    agent = PETSModelBasedAgent(
         env=env,
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
+        learning_style='Optimistic',
         reward_model=PendulumReward(),
         episode_length=horizon,
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
         log_to_wandb=True,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
     )
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,
                                      key=jr.PRNGKey(0))
-
-    wandb.finish()
-
-
-def main(args):
-    experiment(project_name=args.project_name,
-               num_offline_samples=args.num_offline_samples,
-               sac_horizon=args.sac_horizon,
-               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
-               train_steps_sac=args.train_steps_sac,
-               train_steps_bnn=args.train_steps_bnn)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='Model_based_pets')
-    parser.add_argument('--num_offline_samples', type=int, default=100)
-    parser.add_argument('--sac_horizon', type=int, default=100)
-    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
-    parser.add_argument('--train_steps_sac', type=int, default=20_000)
-    parser.add_argument('--train_steps_bnn', type=int, default=3000)
-
-    args = parser.parse_args()
-    main(args)

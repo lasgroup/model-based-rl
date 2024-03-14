@@ -14,11 +14,10 @@ from bsm.utils.normalization import Data
 from jax import jit
 from jax.nn import swish
 from mbpo.optimizers.base_optimizer import BaseOptimizer
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.utils.type_aliases import OptimizerState
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor
-from mbrl.model_based_agent.prepare_dynamics_system_and_actor import prepare_dynamics_system_actor
 from mbrl.utils.brax_utils import EnvInteractor
 
 
@@ -29,14 +28,13 @@ class ModelBasedAgentState:
     key: chex.Array
 
 
-class ModelBasedAgent(ABC):
+class BaseModelBasedAgent(ABC):
 
     def __init__(self,
                  env: BraxEnv,
                  statistical_model: StatisticalModel,
                  reward_model: Reward,
                  optimizer: BaseOptimizer,
-                 learning_style: str,
                  episode_length: int,
                  eval_env: BraxEnv,
                  num_envs: int = 1,
@@ -54,7 +52,6 @@ class ModelBasedAgent(ABC):
         self.env = env
         self.statistical_model = statistical_model
         self.reward_model = reward_model
-        self.learning_style = learning_style
         self.episode_length = episode_length
         self.eval_env = eval_env
         self.num_envs = num_envs
@@ -70,17 +67,18 @@ class ModelBasedAgent(ABC):
         self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
 
         self.key, subkey = jr.split(self.key)
-        self.env_interactor = EnvInteractor(env=self.env,
-                                            eval_env=self.eval_env,
-                                            num_envs=self.num_envs,
-                                            num_eval_envs=self.num_eval_envs,
-                                            episode_length=self.episode_length,
-                                            action_repeat=self.action_repeat,
-                                            key=subkey,
-                                            deterministic_policy_for_data_collection=deterministic_policy_for_data_collection)
+        self.env_interactor = EnvInteractor(
+            env=self.env,
+            eval_env=self.eval_env,
+            num_envs=self.num_envs,
+            num_eval_envs=self.num_eval_envs,
+            episode_length=self.episode_length,
+            action_repeat=self.action_repeat,
+            key=subkey,
+            deterministic_policy_for_data_collection=deterministic_policy_for_data_collection)
 
         self.collected_data_buffer = self.prepare_data_buffers()
-        self.actor = self.prepare_actor(self.learning_style, optimizer)
+        self.actor = self.prepare_actor(optimizer)
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
@@ -97,6 +95,25 @@ class ModelBasedAgent(ABC):
 
         return collected_data_buffer
 
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        raise NotImplementedError
+
+    def _init_data_buffer_states(self,
+                                 key: chex.PRNGKey) -> ReplayBufferState:
+        key_collected_data_bs, key_init_state_bs = jr.split(key)
+        collected_data_buffer_state = self.collected_data_buffer.init(key_collected_data_bs)
+
+        # If we have offline data we insert in the collected data buffer
+        if self.offline_data:
+            assert self.offline_data.observation.shape[-1] == self.env.observation_size
+            assert self.offline_data.action.shape[-1] == self.env.action_size
+            collected_data_buffer_state = self.collected_data_buffer.insert(collected_data_buffer_state,
+                                                                            self.offline_data)
+
+        return collected_data_buffer_state
+
     def init(self, key: chex.Array):
         key_state, key_data_buffers, key_optimizer = jr.split(key, 3)
         collected_data_buffer_state = self._init_data_buffer_states(key_data_buffers)
@@ -105,22 +122,6 @@ class ModelBasedAgent(ABC):
         return ModelBasedAgentState(optimizer_state=init_optimizer_state,
                                     env_steps=0,
                                     key=key_state)
-
-    def prepare_actor(self,
-                      learning_style: str,
-                      optimizer: BaseOptimizer,
-                      ) -> Actor:
-        dynamics, system, actor = prepare_dynamics_system_actor(learning_style)
-        dynamics = dynamics(statistical_model=self.statistical_model,
-                            x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
-        system = system(dynamics=dynamics,
-                        reward=self.reward_model, )
-        actor = actor(env_observation_size=self.env.observation_size,
-                      env_action_size=self.env.action_size,
-                      optimizer=optimizer)
-        actor.set_system(system=system)
-        return actor
 
     def train_policy(self,
                      agent_state: ModelBasedAgentState,
@@ -152,6 +153,34 @@ class ModelBasedAgent(ABC):
         new_agent_state = agent_state.replace(optimizer_state=new_optimizer_state,
                                               key=key)
         return new_agent_state
+
+    def _collected_buffer_to_train_data(self,
+                                        collected_buffer_state: ReplayBufferState):
+        idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
+        all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
+        all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
+        obs = all_transitions.observation
+        actions = all_transitions.action
+        inputs = jnp.concatenate([obs, actions], axis=-1)
+        next_obs = all_transitions.next_observation
+        if self.predict_difference:
+            outputs = next_obs - obs
+        else:
+            outputs = next_obs
+        return Data(inputs=inputs, outputs=outputs)
+
+    def _update_statistical_model(self,
+                                  statistical_model_state: StatisticalModelState,
+                                  collected_data_buffer_state: ReplayBufferState,
+                                  key: chex.PRNGKey):
+        # We prepare data to train from the collected_data_buffer
+        data = self._collected_buffer_to_train_data(collected_data_buffer_state)
+        if self.reset_statistical_model:
+            statistical_model_state = self.statistical_model.init(key=key)
+        new_statistical_model_state = self.statistical_model.update(
+            stats_model_state=statistical_model_state,
+            data=data)
+        return new_statistical_model_state
 
     @partial(jit, static_argnums=0)
     def simulate_on_true_env(self,
@@ -216,174 +245,3 @@ class ModelBasedAgent(ABC):
             print(f'End of Episode {episode_idx}')
         return agent_state
 
-    def _collected_buffer_to_train_data(self,
-                                        collected_buffer_state: ReplayBufferState):
-        idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
-        all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
-        all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
-        obs = all_transitions.observation
-        actions = all_transitions.action
-        inputs = jnp.concatenate([obs, actions], axis=-1)
-        next_obs = all_transitions.next_observation
-        if self.predict_difference:
-            outputs = next_obs - obs
-        else:
-            outputs = next_obs
-        return Data(inputs=inputs, outputs=outputs)
-
-    def _init_data_buffer_states(self,
-                                 key: chex.PRNGKey) -> ReplayBufferState:
-        key_collected_data_bs, key_init_state_bs = jr.split(key)
-        collected_data_buffer_state = self.collected_data_buffer.init(key_collected_data_bs)
-
-        # If we have offline data we insert in the collected data buffer
-        if self.offline_data:
-            assert self.offline_data.observation.shape[-1] == self.env.observation_size
-            assert self.offline_data.action.shape[-1] == self.env.action_size
-            collected_data_buffer_state = self.collected_data_buffer.insert(collected_data_buffer_state,
-                                                                            self.offline_data)
-
-        return collected_data_buffer_state
-
-    def _update_statistical_model(self,
-                                  statistical_model_state: StatisticalModelState,
-                                  collected_data_buffer_state: ReplayBufferState,
-                                  key: chex.PRNGKey):
-        # We prepare data to train from the collected_data_buffer
-        data = self._collected_buffer_to_train_data(collected_data_buffer_state)
-        if self.reset_statistical_model:
-            statistical_model_state = self.statistical_model.init(key=key)
-        new_statistical_model_state = self.statistical_model.update(
-            stats_model_state=statistical_model_state,
-            data=data)
-        return new_statistical_model_state
-
-
-if __name__ == "__main__":
-    from mbrl.envs.pendulum import PendulumEnv
-    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-    from mbpo.optimizers import SACOptimizer
-    from distrax import Normal
-    from mbrl.utils.offline_data import PendulumOfflineData
-
-    ENTITY = 'trevenl'
-
-    env = PendulumEnv(reward_source='dm-control')
-
-
-    class PendulumReward(Reward):
-        def __init__(self):
-            super().__init__(x_dim=2, u_dim=1)
-
-        def __call__(self,
-                     x: chex.Array,
-                     u: chex.Array,
-                     reward_params: RewardParams,
-                     x_next: chex.Array | None = None
-                     ):
-            assert x.shape == (3,) and u.shape == (1,)
-            theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
-            target_angle = env.reward_params.target_angle
-            diff_th = theta - target_angle
-            diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-            reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                   0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
-            reward = reward.squeeze()
-            reward_dist = Normal(reward, jnp.zeros_like(reward))
-            return reward_dist, reward_params
-
-        def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': env.dt}
-
-
-    offline_data_gen = PendulumOfflineData()
-    key = jr.PRNGKey(0)
-
-    offline_data = offline_data_gen.sample_transitions(key=key,
-                                                       num_samples=100)
-
-    horizon = 200
-    model = BNNStatisticalModel(
-        input_dim=env.observation_size + env.action_size,
-        output_dim=env.observation_size,
-        num_training_steps=3_000,
-        output_stds=1e-3 * jnp.ones(env.observation_size),
-        features=(64, 64, 64),
-        num_particles=5,
-        logging_wandb=True,
-        return_best_model=True,
-        eval_batch_size=64,
-        train_share=0.8,
-        eval_frequency=1_000,
-    )
-
-    sac_kwargs = {
-        'num_timesteps': 20_000,
-        'episode_length': 64,
-        'num_env_steps_between_updates': 10,
-        'num_envs': 16,
-        'num_eval_envs': 4,
-        'lr_alpha': 3e-4,
-        'lr_policy': 3e-4,
-        'lr_q': 3e-4,
-        'wd_alpha': 0.,
-        'wd_policy': 0.,
-        'wd_q': 0.,
-        'max_grad_norm': 1e5,
-        'discounting': 0.99,
-        'batch_size': 32,
-        'num_evals': 20,
-        'normalize_observations': True,
-        'reward_scaling': 1.,
-        'tau': 0.005,
-        'min_replay_size': 10 ** 4,
-        'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 10 * 16,  # should be num_envs * num_env_steps_between_updates
-        'deterministic_eval': True,
-        'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (64, 64),
-        'policy_activation': swish,
-        'critic_hidden_layer_sizes': (64, 64),
-        'critic_activation': swish,
-        'wandb_logging': True,
-        'return_best_model': True,
-    }
-    max_replay_size_true_data_buffer = 10 ** 4
-    dummy_sample = Transition(observation=jnp.ones(env.observation_size),
-                              action=jnp.zeros(shape=(env.action_size,)),
-                              reward=jnp.array(0.0),
-                              discount=jnp.array(0.99),
-                              next_observation=jnp.ones(env.observation_size))
-
-    sac_buffer = UniformSamplingQueue(
-        max_replay_size=max_replay_size_true_data_buffer,
-        dummy_data_sample=dummy_sample,
-        sample_batch_size=1)
-
-    optimizer = SACOptimizer(system=None,
-                             true_buffer=sac_buffer,
-                             **sac_kwargs)
-
-    wandb.init(project="Model-based Agent",
-               dir='/cluster/scratch/' + ENTITY,
-               )
-
-    agent = ModelBasedAgent(
-        env=env,
-        eval_env=env,
-        statistical_model=model,
-        optimizer=optimizer,
-        learning_style='Optimistic',
-        reward_model=PendulumReward(),
-        episode_length=horizon,
-        offline_data=offline_data,
-        num_envs=1,
-        num_eval_envs=1,
-        log_to_wandb=True,
-    )
-
-    agent_state = agent.run_episodes(num_episodes=20,
-                                     start_from_scratch=True,
-                                     key=jr.PRNGKey(0))
-
-    wandb.finish()

@@ -1,4 +1,6 @@
 from typing import Generic, Tuple
+
+import jax.random
 from distrax import Distribution, Normal
 import chex
 import jax.numpy as jnp
@@ -116,6 +118,16 @@ class PetsSystem(System, Generic[ModelState, RewardParams]):
         self.x_dim = dynamics.x_dim
         self.u_dim = dynamics.u_dim
 
+    def get_reward(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   reward_params: RewardParams,
+                   x_next: chex.Array,
+                   key: jax.random.PRNGKey):
+        reward_dist, new_reward_params = self.reward(x, u, reward_params, x_next)
+        reward = reward_dist.sample(seed=key)
+        return reward, new_reward_params
+
     def step(self,
              x: chex.Array,
              u: chex.Array,
@@ -132,8 +144,7 @@ class PetsSystem(System, Generic[ModelState, RewardParams]):
         x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
         next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
         x_next = x_next_dist.sample(seed=next_state_key)
-        reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
-        reward = reward_dist.sample(seed=reward_key)
+        reward, new_reward_params = self.get_reward(x, u, system_params.reward_params, x_next, reward_key)
         new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
                                                    reward_params=new_reward_params,
                                                    key=new_systems_key)
@@ -168,32 +179,12 @@ class OptimisticSystem(PetsSystem, Generic[ModelState, RewardParams]):
     def __init__(self, dynamics: OptimisticDynamics[ModelState], reward: Reward[RewardParams]):
         super().__init__(dynamics, reward)
 
-    def step(self,
-             x: chex.Array,
-             u: chex.Array,
-             system_params: SystemParams[ModelState, RewardParams],
-             ) -> SystemState:
-        """
-
-        :param x: current state of the system
-        :param u: current augmented action of the system
-        :param system_params: parameters of the system
-        :return: Tuple of next state, reward, updated system parameters
-        """
-        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
-        next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
-        x_next = x_next_dist.sample(seed=next_state_key)
-        reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim],
-                                                     system_params.reward_params, x_next)
-        reward = reward_dist.sample(seed=reward_key)
-        new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
-                                                   reward_params=new_reward_params,
-                                                   key=new_systems_key)
-        new_system_state = SystemState(
-            x_next=x_next,
-            reward=reward,
-            system_params=new_systems_params,
-            done=jnp.array(0.0),
-        )
-        return new_system_state
+    def get_reward(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   reward_params: RewardParams,
+                   x_next: chex.Array,
+                   key: jax.random.PRNGKey):
+        reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], reward_params, x_next)
+        reward = reward_dist.sample(seed=key)
+        return reward, new_reward_params
