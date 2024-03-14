@@ -1,12 +1,12 @@
 import exp
-from experiments.util import generate_run_commands, generate_base_command, dict_permutations, available_gpus
+from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 PROJECT_NAME = 'Model_based_optimistic_March13_12_30'
 
 general_configs = {
     'project_name': [PROJECT_NAME],
     'num_offline_samples': [0, 100, 200],
-    'sac_horizon': [32, 64, 128,],
+    'sac_horizon': [32, 64, 128, ],
     'deterministic_policy_for_data_collection': [0, 1],
     'train_steps_sac': [1_000_000],
     'train_steps_bnn': [50_000],
