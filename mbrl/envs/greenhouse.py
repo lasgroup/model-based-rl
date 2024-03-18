@@ -21,7 +21,7 @@ class GreenHouseParams:
     # parameter 1
     kappa: chex.Array = struct.field(default_factory=lambda: jnp.array(5.03 * (10 ** (-5))))  # ventilation rate
     # parameter 2
-    lam: chex.Array = struct.field(default_factory=lambda: jnp.array(0.46153))  # pressure constant
+    lam: chex.Array = struct.field(default_factory=lambda: jnp.array(0.46152))  # pressure constant
     mu: chex.Array = struct.field(default_factory=lambda: jnp.array(1.4667))  # Molar weight fraction C02 CH20
     nu_2: chex.Array = struct.field(
         default_factory=lambda: jnp.array(3.68 * (10 ** (-5))))  # ventilation rate parameter 1
@@ -154,7 +154,7 @@ class GreenHouseEnv(Env):
         ]
     )
 
-    input_ub = jnp.array([80.0, 1.0, 1.0, 2.0])
+    input_ub = jnp.array([80.0, 1.0, 1.0, 2.1])
     input_lb = jnp.array([10.0, 0.0, 0.0, 0.0])
 
     def __init__(self, dt_integration: float = 60, reward_source: str = 'yield_maximization'):
@@ -238,7 +238,7 @@ class GreenHouseEnv(Env):
 
     def ode(self, obs: jax.Array, action: jax.Array, params: GreenHouseParams) -> jax.Array:
         # C, C, C, m, g/m^3, kg/m^-3
-        t_g, t_p, t_s, c_i, v_i = obs[0], obs[1], obs[2], obs[3], obs[5]
+        t_g, t_p, t_s, c_i, v_i = obs[0], obs[1], obs[2], obs[3], obs[4]
         # g/m^-2, g/m^-2, g/m^-2, []
         mb, mf, ml, d_p = obs[self.greenhouse_state_dim], obs[self.greenhouse_state_dim + 1], \
             obs[self.greenhouse_state_dim + 2], obs[self.greenhouse_state_dim + 3]
