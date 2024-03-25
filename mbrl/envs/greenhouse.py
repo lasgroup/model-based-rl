@@ -214,9 +214,9 @@ class GreenHouseEnv(Env):
         return 1 - jnp.exp(-b1 * mb)
 
     def get_respiration_param(self, obs: jax.Array, action: jax.Array, params: GreenHouseParams):
-        ml = obs[self.greenhouse_state_dim + 2]
-        l_lai = (ml / params.wr) ** (params.laim) / (1 + (ml / params.wr) ** (params.laim))
-        R = - params.p1 - params.p5 * l_lai
+        # ml = x[self.greenhouse_state_dim + 2]
+        # l_lai = (ml / params.wr) ** (params.laim) / (1 + (ml / params.wr) ** (params.laim))
+        R = - params.p1 - params.p5
         return R
 
     def get_crop_photosynthesis(self, obs: jax.Array, action: jax.Array, params: GreenHouseParams):
@@ -224,7 +224,12 @@ class GreenHouseEnv(Env):
         ml = obs[self.greenhouse_state_dim + 2]
         G = obs[-2]
         i_par = params.eta * G * params.mp * params.pg
-        c_ppm = (10 ** 6) * params.rg / (params.patm * params.Mco2) * (t_g + params.T0) * c_i
+        # note patm is in kPa. c_i is in g/m^3
+        # c_ppm units: m^3 Pa/(mol K) * K * g/m^3 /(kPa * kg/mol)
+        # c_ppm: units 10^-3 m^3 kPa/mol * 10^-3 kg/m^3 /(kPa * kg/mol)
+        # c_ppm: units 10^-6 [] -> need to multiply with 10^-6 to get right units
+        # c_ppm = 1/mol * g/kg
+        c_ppm = params.rg / (params.patm * params.Mco2) * (t_g + params.T0) * c_i
         l_lai = (ml / params.wr) ** (params.laim) / (1 + (ml / params.wr) ** (params.laim))
         p_g = params.pm * l_lai * i_par / (params.p3 + i_par) * c_ppm / (params.p4 + c_ppm)
         return p_g
@@ -233,7 +238,8 @@ class GreenHouseEnv(Env):
         d_p = obs[self.greenhouse_state_dim + 3]
         t = obs[-1]
         t_g = obs[0]
-        h = (d_p >= 1) * (params.d1 + params.d2 * jnp.log(t_g / params.d3) - params.d4 * t)
+        temp_ratio = jnp.clip(t_g / params.d3, a_min=1e-6)
+        h = (d_p >= 1) * (params.d1 + params.d2 * jnp.log(temp_ratio) - params.d4 * t)
         return h
 
     def ode(self, obs: jax.Array, action: jax.Array, params: GreenHouseParams) -> jax.Array:
@@ -304,8 +310,8 @@ class GreenHouseEnv(Env):
         hf, hl = h * params.yf, h * params.yl
         dmf_dt = (b * g_f - (1 - b) * rf - hf) * mf
         dml_dt = (b * g_l - (1 - b) * rl - hl) * ml
-        dd_p_dt = params.d1 + params.d2 * jnp.log(t_g / params.d3) - params.d4 * t - h
-
+        temp_ratio = jnp.clip(t_g / params.d3, a_min=1e-6)
+        dd_p_dt = params.d1 + params.d2 * jnp.log(temp_ratio) - params.d4 * t - h
         # Exogenous effects
 
         dt_o_dt = jnp.zeros_like(dt_g_dt)
@@ -323,7 +329,6 @@ class GreenHouseEnv(Env):
             dmb_dt, dmf_dt, dml_dt, dd_p_dt,
             dt_o_dt, dt_d_dt, dc_o_dt, dv_o_dt, dw_dt, dG_dt, dt_dt,
         ])
-
         return dx_dt
 
     def integrate(self, obs: jax.Array, action: jax.Array, params: GreenHouseParams):
