@@ -12,7 +12,6 @@ from bsm.statistical_model import StatisticalModel
 from bsm.utils import StatisticalModelState
 from bsm.utils.normalization import Data
 from jax import jit
-from jax.nn import swish
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.utils.type_aliases import OptimizerState
@@ -205,7 +204,8 @@ class BaseModelBasedAgent(ABC):
 
     def do_episode(self,
                    agent_state: ModelBasedAgentState,
-                   episode_idx: int) -> ModelBasedAgentState:
+                   episode_idx: int,
+                   ) -> ModelBasedAgentState:
         if episode_idx > 0 or self.offline_data:
             # If we collected some data already then we train dynamics model and the policy
             print(f'Start of dynamics training')
