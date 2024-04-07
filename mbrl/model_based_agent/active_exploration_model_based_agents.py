@@ -8,7 +8,6 @@ from mbrl.model_based_agent.system_wrapper import OptimisticExplorationSystem, O
 from mbpo.utils.type_aliases import OptimizerState
 import chex
 import jax.random as jr
-import ray
 from typing import List, Tuple
 import wandb
 from brax.envs import Env as BraxEnv
@@ -76,7 +75,6 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
     OptimizerState]]:
         actors_and_opt_states = []
         dynamics_type, system_type, actor_type = PetsDynamics, PetsSystem, PetsActor
-        # we have to prevent the optimizer to log on wandb. Then we can parallelize the computation with ray.
         for reward_model in self.reward_model_list:
             optimizer_new = copy.deepcopy(optimizer)
             if isinstance(optimizer_new, BraxOptimizer):
@@ -99,7 +97,6 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
         return actors_and_opt_states
 
     @staticmethod
-    @ray.remote
     def train_single_actor(actor, optimizer_state):
         # TODO: here we always start training the optimizer from scratch, we might want to just continue training after
         #  the data buffer surpasses certain margin
@@ -111,9 +108,8 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                               agent_state: ModelBasedAgentState,
                               episode_idx: int) -> List[Tuple[Actor, OptimizerState]]:
         actors_for_reward_models = self.update_model_state_for_reward_optimizers(actors_for_reward_models, agent_state)
-        training_outputs = ray.get([self.train_single_actor.remote(actor, optimizer_state)
-                                    for actor, optimizer_state in actors_for_reward_models])
-        ray.shutdown()
+        training_outputs = [self.train_single_actor(actor, optimizer_state)
+                                    for actor, optimizer_state in actors_for_reward_models]
         for actor_idx, (actor, _) in enumerate(actors_for_reward_models):
             training_output = training_outputs[actor_idx]
             new_optimizer_state, summaries = training_output.optimizer_state, \
@@ -162,6 +158,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
         if episode_idx % self.eval_frequency == 0:
+            print(f'Start training of evaluation policy')
             actors_for_reward_models = self.train_reward_policies(actors_for_reward_models=actors_for_reward_models,
                                                                   agent_state=agent_state,
                                                                   episode_idx=episode_idx,
