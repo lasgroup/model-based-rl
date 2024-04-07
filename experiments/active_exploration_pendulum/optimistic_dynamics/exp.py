@@ -19,11 +19,13 @@ from mbrl.utils.offline_data import PendulumOfflineData
 ENTITY = 'sukhijab'
 
 
-def experiment(project_name: str = 'GPUSpeedTest',
-               num_offline_samples: int = 100,
-               sac_horizon: int = 100,
-               deterministic_policy_for_data_collection: bool = False
-               ):
+def experiment(
+        seed: int = 0,
+        project_name: str = 'GPUSpeedTest',
+        num_offline_samples: int = 100,
+        sac_horizon: int = 100,
+        deterministic_policy_for_data_collection: bool = False
+):
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
@@ -63,10 +65,10 @@ def experiment(project_name: str = 'GPUSpeedTest',
     reward_model_swing_down = PendulumReward(env=swing_down_env)
 
     offline_data_gen = PendulumOfflineData()
-    key = jr.PRNGKey(0)
-
+    key = jr.PRNGKey(seed)
+    key_offline_data, key = jr.split(key, 2)
     if num_offline_samples > 0:
-        offline_data = offline_data_gen.sample_transitions(key=key,
+        offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                            num_samples=num_offline_samples)
     else:
         offline_data = None
@@ -75,7 +77,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     model = BNNStatisticalModel(
         input_dim=swing_up_env.observation_size + swing_up_env.action_size,
         output_dim=swing_up_env.observation_size,
-        num_training_steps=50_000,
+        num_training_steps=15_000,
         output_stds=1e-3 * jnp.ones(swing_up_env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
@@ -87,7 +89,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     )
 
     sac_kwargs = {
-        'num_timesteps': 1_000_000,
+        'num_timesteps': 100_000,
         'episode_length': sac_horizon,
         'num_env_steps_between_updates': 20,
         'num_envs': 64,
@@ -149,12 +151,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
         num_envs=1,
         num_eval_envs=1,
         log_to_wandb=True,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
+        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
     )
 
     agent_state, actors_for_reward_models = agent.run_episodes(num_episodes=20,
                                                                start_from_scratch=True,
-                                                               key=jr.PRNGKey(0))
+                                                               key=key)
 
     wandb.finish()
 
@@ -168,10 +170,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
     parser.add_argument('--num_offline_samples', type=int, default=100)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--train_steps_sac', type=int, default=20_000)
+    parser.add_argument('--train_steps_bnn', type=int, default=3000)
 
     args = parser.parse_args()
     main(args)
