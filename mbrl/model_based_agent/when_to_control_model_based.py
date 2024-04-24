@@ -112,9 +112,9 @@ if __name__ == "__main__":
     horizon = 100
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
-        output_dim=env.observation_size + 1,  # One more for the reward
+        output_dim=env.observation_size + 1 - 1,  # One more for the reward -1 for env time
         num_training_steps=30_000,
-        output_stds=1e-3 * jnp.ones(env.observation_size + 1),  # One more for the reward
+        output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # One more for the reward -1 for env_time
         features=(64, 64, 64),
         num_particles=5,
         logging_wandb=True,
