@@ -93,7 +93,7 @@ if __name__ == "__main__":
                      reward_params: RewardParams,
                      x_next: chex.Array | None = None
                      ):
-            assert x.shape == (4,) and u.shape == (2,)
+            assert x.shape == (5,) and u.shape == (2,)
             reward = jnp.array(-1.0)
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
