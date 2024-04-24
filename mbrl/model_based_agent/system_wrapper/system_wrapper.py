@@ -87,6 +87,9 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                  statistical_model: StatisticalModel,
                  aleatoric_noise_in_prediction: bool = True,
                  predict_difference: bool = True,
+                 min_time_between_switches: float = 0.05,
+                 max_time_between_switches: float = 1.5,
+                 # TODO: this works ONLY!!! for pendulum, change min and max time passing
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.x_dim = self.x_dim
@@ -94,6 +97,8 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
         self.statistical_model = statistical_model
         self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
         self.predict_difference = predict_difference
+        self.min_time_between_switches = min_time_between_switches
+        self.max_time_between_switches = max_time_between_switches
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
         return DynamicsParams(
@@ -106,15 +111,27 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                                           statistical_model_state=self.statistical_model.vmap_input_axis(
                                               data_axis=data_axis)))
 
+    @staticmethod
+    def pseudo_to_real_time(pseudo_time: chex.Array,
+                            t_lower: float,
+                            t_upper: float,
+                            ) -> chex.Array:
+        time_for_action = ((t_upper - t_lower) / 2 * pseudo_time + (t_upper + t_lower) / 2)
+        return time_for_action
+
     def next_state(self,
                    x: chex.Array,
                    u: chex.Array,
                    dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
         assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        # state, reward, time_to_go = x[:-2], x[-2], x[-1]
-        # action, time_for_action = u[:-1], u[-1]
-        state, time_to_go = x[:-2], x[-1]
-        time_for_action = u[-1]
+        # state, reward, current_time = x[:-2], x[-2], x[-1]
+        # action, pseudo_time_for_action = u[:-1], u[-1]
+        state, current_time = x[:-2], x[-1]
+        pseudo_time_for_action = u[-1]
+        # Now we transform pseudo_time_for_action to time for action
+        time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
+                                                   self.min_time_between_switches,
+                                                   self.max_time_between_switches)
         # Prepare statistical model input
         sm_input = jnp.concatenate([state, time_to_go.reshape(1), u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
