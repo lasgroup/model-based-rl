@@ -111,35 +111,39 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                    u: chex.Array,
                    dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
         assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        state, time_to_go = x[:-1], x[-1]
-        action, time_for_action = u[:-1], u[-1]
-
+        # system_state, reward, time_to_go = x[:-2], x[-2], x[-1]
+        # action, time_for_action = u[:-1], u[-1]
+        state, time_to_go = x[:-2], x[-1]
+        time_for_action = u[-1]
         # Prepare statistical model input
-        sm_input = jnp.concatenate([state, action, time_for_action.reshape(1, )])
+        sm_input = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
 
         model_output = self.statistical_model(input=sm_input,
                                               statistical_model_state=dynamics_params.statistical_model_state)
         scale_std = model_output.epistemic_std
-        delta_s_b_dist = Normal(loc=model_output.mean, scale=scale_std)
-        delta_s_b = delta_s_b_dist.sample(seed=key_sample_x_next)
-
+        # dist for [system_state, reward]
+        pred_dist = Normal(loc=model_output.mean, scale=scale_std)
+        pred_sample = pred_dist.sample(seed=key_sample_x_next)
+        pred_sample_state, pred_sample_reward = pred_sample[:-1], pred_sample[-1]
         if self.predict_difference:
-            state_next = state + delta_s_b[:-1]
-
+            state_next = state + pred_sample_state
         else:
-            state_next = state + delta_s_b[:-1]
+            state_next = pred_sample_state
 
-        bonus_next = delta_s_b[-1]
+        # what if this becomes negative
+        time_to_go = jnp.clip(time_to_go - time_for_action, a_min=0).reshape(1)
         augmented_x_next = jnp.concatenate([state_next,
-                                            (time_to_go - time_for_action).reshape(1),
-                                            bonus_next.reshape(1), ])
+                                            pred_sample_reward.reshape(1),
+                                            time_to_go,
+                                            ])
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
         # Part of aleatoric uncertainty in time is equal to 0
         aleatoric_std = jnp.concatenate([model_output.aleatoric_std[:-1],
+                                         model_output.aleatoric_std[-1].reshape(1, ),
                                          jnp.zeros(shape=(1,)),
-                                         model_output.aleatoric_std[-1].reshape(1, ), ])
+                                         ])
         if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
 
@@ -374,8 +378,8 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
              ) -> SystemState:
         """
 
-        :param x: current state of the system
-        :param u: current action of the system
+        :param x: current state of the system [system_state, integrated_reward, time_to_go]
+        :param u: current action of the system [system_action, time_for_control]
         :param system_params: parameters of the system
         :return: Tuple of next state, reward, updated system parameters
         """
@@ -385,7 +389,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
         x_next = x_next_dist.sample(seed=next_state_key)
         assert x_next.shape == (self.x_dim + 1,)
         # We split the x_next into next state and integrated reward
-        x_next, integrated_reward = x_next[:-1], x_next[-1]
+        next_system_state, integrated_reward, time_to_go = x_next[:-2], x_next[-2], x_next[-1]
         reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
         reward = reward_dist.sample(seed=reward_key)
         reward = reward + integrated_reward
