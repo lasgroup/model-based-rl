@@ -80,6 +80,77 @@ class PetsDynamics(Dynamics, Generic[ModelState]):
         return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
+class TransitionCostDynamics(Dynamics, Generic[ModelState]):
+    def __init__(self,
+                 x_dim: int,
+                 u_dim: int,
+                 statistical_model: StatisticalModel,
+                 aleatoric_noise_in_prediction: bool = True,
+                 predict_difference: bool = True,
+                 ):
+        Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
+        self.x_dim = self.x_dim
+        self.u_dim = self.u_dim
+        self.statistical_model = statistical_model
+        self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
+        self.predict_difference = predict_difference
+
+    def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
+        return DynamicsParams(
+            key=data_axis,
+            statistical_model_state=self.statistical_model.vmap_input_axis(data_axis=data_axis)
+        )
+
+    def vmap_output_axis(self, data_axis=0) -> tuple[int, DynamicsParams]:
+        return (data_axis, DynamicsParams(key=data_axis,
+                                          statistical_model_state=self.statistical_model.vmap_input_axis(
+                                              data_axis=data_axis)))
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        state, time_to_go = x[:-1], x[-1]
+        action, time_for_action = u[:-1], u[-1]
+
+        # Prepare statistical model input
+        sm_input = jnp.concatenate([state, action, time_for_action.reshape(1, )])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+
+        model_output = self.statistical_model(input=sm_input,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        scale_std = model_output.epistemic_std
+        delta_s_b_dist = Normal(loc=model_output.mean, scale=scale_std)
+        delta_s_b = delta_s_b_dist.sample(seed=key_sample_x_next)
+
+        if self.predict_difference:
+            state_next = state + delta_s_b[:-1]
+
+        else:
+            state_next = state + delta_s_b[:-1]
+
+        bonus_next = delta_s_b[-1]
+        augmented_x_next = jnp.concatenate([state_next,
+                                            (time_to_go - time_for_action).reshape(1),
+                                            bonus_next.reshape(1), ])
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        # Part of aleatoric uncertainty in time is equal to 0
+        aleatoric_std = jnp.concatenate([model_output.aleatoric_std[:-1],
+                                         jnp.zeros(shape=(1,)),
+                                         model_output.aleatoric_std[-1].reshape(1, ), ])
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+
+        return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
+
+    def init_params(self, key: chex.PRNGKey) -> DynamicsParams:
+        param_key, model_state_key = jr.split(key, 2)
+        model_state = self.statistical_model.init(model_state_key)
+        return DynamicsParams(key=key, statistical_model_state=model_state)
+
+
 class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -188,3 +259,65 @@ class OptimisticSystem(PetsSystem, Generic[ModelState, RewardParams]):
         reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], reward_params, x_next)
         reward = reward_dist.sample(seed=key)
         return reward, new_reward_params
+
+
+class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: TransitionCostDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
+        self.dynamics = dynamics
+        self.reward = reward
+        self.x_dim = dynamics.x_dim
+        self.u_dim = dynamics.u_dim
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: SystemParams[ModelState, RewardParams],
+             ) -> SystemState:
+        """
+
+        :param x: current state of the system
+        :param u: current action of the system
+        :param system_params: parameters of the system
+        :return: Tuple of next state, reward, updated system parameters
+        """
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
+        next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
+        x_next = x_next_dist.sample(seed=next_state_key)
+        assert x_next.shape == (self.x_dim + 1,)
+        # We split the x_next into next state and integrated reward
+        x_next, integrated_reward = x_next[:-1], x_next[-1]
+        reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
+        reward = reward_dist.sample(seed=reward_key)
+        reward = reward + integrated_reward
+        new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
+                                                   reward_params=new_reward_params,
+                                                   key=new_systems_key)
+        # We are done if time-to-go <= 0.0
+        done = jnp.array(x_next[-1] <= 0.0).astype(float)
+        new_system_state = SystemState(
+            x_next=x_next,
+            reward=reward,
+            system_params=new_systems_params,
+            done=done,
+        )
+        return new_system_state
+
+    def vmap_input_axis(self, data_axis: int = 0) -> SystemParams[ModelState, RewardParams]:
+        return SystemParams(
+            dynamics_params=self.dynamics.vmap_input_axis(data_axis),
+            reward_params=None,
+            key=data_axis,
+        )
+
+    def vmap_output_axis(self, data_axis: int = 0) -> SystemState[ModelState, RewardParams]:
+        return SystemState(
+            x_next=data_axis,
+            reward=data_axis,
+            system_params=self.vmap_input_axis(data_axis),
+            done=data_axis,
+        )
+
+    def system_params_vmap_axes(self, axes: int = 0):
+        return self.vmap_input_axis(data_axis=axes)
