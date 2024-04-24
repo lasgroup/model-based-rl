@@ -133,7 +133,7 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                                                    self.min_time_between_switches,
                                                    self.max_time_between_switches)
         # Prepare statistical model input
-        sm_input = jnp.concatenate([state, time_to_go.reshape(1), u])
+        sm_input = jnp.concatenate([state, current_time.reshape(1), u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
 
         model_output = self.statistical_model(input=sm_input,
@@ -149,10 +149,10 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
             state_next = pred_sample_state
 
         # what if this becomes negative
-        time_to_go = jnp.clip(time_to_go - time_for_action, a_min=0).reshape(1)
+        current_time = jnp.clip(current_time + time_for_action, a_min=0).reshape(1)
         augmented_x_next = jnp.concatenate([state_next,
                                             pred_sample_reward.reshape(1),
-                                            time_to_go,
+                                            current_time,
                                             ])
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
@@ -395,7 +395,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
              ) -> SystemState:
         """
 
-        :param x: current state of the system [system_state, integrated_reward, time_to_go]
+        :param x: current state of the system [system_state, integrated_reward, current_time]
         :param u: current action of the system [system_action, time_for_control]
         :param system_params: parameters of the system
         :return: Tuple of next state, reward, updated system parameters
@@ -406,15 +406,16 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
         x_next = x_next_dist.sample(seed=next_state_key)
         assert x_next.shape == (self.x_dim + 1,)
         # We split the x_next into next state and integrated reward
-        next_system_state, integrated_reward, time_to_go = x_next[:-2], x_next[-2], x_next[-1]
+        next_system_state, integrated_reward, current_time = x_next[:-2], x_next[-2], x_next[-1]
         reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
         reward = reward_dist.sample(seed=reward_key)
         reward = reward + integrated_reward
         new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
                                                    reward_params=new_reward_params,
                                                    key=new_systems_key)
-        # We are done if time-to-go <= 0.0
-        done = jnp.array(x_next[-1] <= 0.0).astype(float)
+        # We are done if current_time >= Horizon time
+        done = jnp.array(x_next[-1] >= 5.0).astype(
+            float)  # TODO: this works only for Pendulum, add horizon as a parameter
         new_system_state = SystemState(
             x_next=x_next,
             reward=reward,
