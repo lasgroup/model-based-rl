@@ -97,7 +97,7 @@ class WhenToControlWrapper(OfflineData):
                                   min_time_between_switches=1 * base_env.dt,
                                   max_time_between_switches=30 * base_env.dt,
                                   switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
-                                  time_as_part_of_state=False,
+                                  time_as_part_of_state=True,
                                   discounting=1.0
                                   )
         super().__init__(env=env)
@@ -109,7 +109,9 @@ class WhenToControlWrapper(OfflineData):
         angles = jr.uniform(key_angle, shape=(num_samples,), minval=-jnp.pi, maxval=jnp.pi)
         cos, sin = jnp.cos(angles), jnp.sin(angles)
         angular_velocity = jr.uniform(key_angular_velocity, shape=(num_samples,), minval=-5, maxval=5)
-        return jnp.stack([cos, sin, angular_velocity], axis=-1)
+        current_times = jr.uniform(key=key, shape=(num_samples,),
+                                   minval=0, maxval=5.0)  # TODO: works only for Pendulum
+        return jnp.stack([cos, sin, angular_velocity, current_times], axis=-1)
 
     def _sample_actions(self,
                         key: chex.PRNGKey,
@@ -120,15 +122,10 @@ class WhenToControlWrapper(OfflineData):
     def sample_transitions(self,
                            key: chex.PRNGKey,
                            num_samples: int) -> Transition:
-        states = self.sample_states(key=key, num_samples=num_samples)
-        actions = self.sample_actions(key=key, num_samples=num_samples)
-
-        augmented_pipeline_state = AugmentedPipelineState(
-            pipeline_state=jnp.zeros(shape=(num_samples,)),
-            time=jnp.zeros(shape=(num_samples,)),
-        )
-
-        brax_state = State(pipeline_state=augmented_pipeline_state,
+        key_states, key_actions = jr.split(key, 2)
+        states = self.sample_states(key=key_states, num_samples=num_samples)
+        actions = self.sample_actions(key=key_actions, num_samples=num_samples)
+        brax_state = State(pipeline_state=jnp.zeros(shape=(num_samples,)),
                            obs=states,
                            reward=jnp.zeros(shape=(num_samples,)),
                            done=jnp.zeros(shape=(num_samples,)))
@@ -141,8 +138,6 @@ class WhenToControlWrapper(OfflineData):
                                  next_observation=next_states.obs
                                  )
         return transitions
-
-
 
 
 if __name__ == '__main__':
