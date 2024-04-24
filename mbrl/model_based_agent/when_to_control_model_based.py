@@ -53,12 +53,12 @@ class WhenToControlModelBasedAgent(BaseModelBasedAgent):
         actions = all_transitions.action
         rewards = all_transitions.reward.reshape(-1, 1)  # This should be only integrated reward
         inputs = jnp.concatenate([obs, actions], axis=-1)
-        next_obs = all_transitions.next_observation[..., :-1]  # We remove the reward and time_to_go
+        next_obs = all_transitions.next_observation[..., :-1]  # We remove time_to_go
         if self.predict_difference:
             target = next_obs - obs[..., :-1]
         else:
             target = next_obs
-        outputs = jnp.concatenate([target, rewards], axis=-1) # append the integrated reward to the output
+        outputs = jnp.concatenate([target, rewards], axis=-1)  # append the integrated reward to the output
         return Data(inputs=inputs, outputs=outputs)
 
 
