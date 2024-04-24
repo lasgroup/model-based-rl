@@ -111,12 +111,12 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                    u: chex.Array,
                    dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
         assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        # system_state, reward, time_to_go = x[:-2], x[-2], x[-1]
+        # state, reward, time_to_go = x[:-2], x[-2], x[-1]
         # action, time_for_action = u[:-1], u[-1]
         state, time_to_go = x[:-2], x[-1]
         time_for_action = u[-1]
         # Prepare statistical model input
-        sm_input = jnp.concatenate([x, u])
+        sm_input = jnp.concatenate([state, time_to_go.reshape(1), u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
 
         model_output = self.statistical_model(input=sm_input,

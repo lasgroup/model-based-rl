@@ -47,18 +47,18 @@ class WhenToControlModelBasedAgent(BaseModelBasedAgent):
         idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
         all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
         all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
-        # obs = [state, reward, time_to_go]
+        # obs = [state, time_to_go]
         obs = all_transitions.observation
         # action = [env_action, time_to_control]
         actions = all_transitions.action
         rewards = all_transitions.reward.reshape(-1, 1)  # This should be only integrated reward
         inputs = jnp.concatenate([obs, actions], axis=-1)
-        next_obs = all_transitions.next_observation[..., :-2]  # We remove the reward and time_to_go
+        next_obs = all_transitions.next_observation[..., :-1]  # We remove the reward and time_to_go
         if self.predict_difference:
-            delta_obs = next_obs - obs[..., :-2]
+            target = next_obs - obs[..., :-1]
         else:
-            delta_obs = next_obs
-        outputs = jnp.concatenate([delta_obs, rewards], axis=-1) # append the integrated reward to the output
+            target = next_obs
+        outputs = jnp.concatenate([target, rewards], axis=-1) # append the integrated reward to the output
         return Data(inputs=inputs, outputs=outputs)
 
 
