@@ -17,9 +17,9 @@ from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
 
-from mbrl.model_based_agent.optimizer_wrapper import Actor
-from mbrl.model_based_agent.prepare_dynamics_system_and_actor import prepare_dynamics_system_actor
+from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
 from mbrl.utils.brax_utils import EnvInteractor
+from mbrl.model_based_agent.system_wrapper import TransitionCostDynamics, TransitionCostPetsSystem
 
 
 @chex.dataclass
@@ -80,7 +80,7 @@ class ModelBasedAgent(ABC):
                                             deterministic_policy_for_data_collection=deterministic_policy_for_data_collection)
 
         self.collected_data_buffer = self.prepare_data_buffers()
-        self.actor = self.prepare_actor(self.learning_style, optimizer)
+        self.actor = self.prepare_actor(optimizer)
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
@@ -107,10 +107,9 @@ class ModelBasedAgent(ABC):
                                     key=key_state)
 
     def prepare_actor(self,
-                      learning_style: str,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = prepare_dynamics_system_actor(learning_style)
+        dynamics, system, actor = TransitionCostDynamics, TransitionCostPetsSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size)
@@ -223,7 +222,7 @@ class ModelBasedAgent(ABC):
         all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
         obs = all_transitions.observation[..., :-1]  # We remove the time-to-go component
         actions = all_transitions.action
-        rewards = all_transitions.reward.reshape(-1, 1) # This should be only integrated reward
+        rewards = all_transitions.reward.reshape(-1, 1)  # This should be only integrated reward
         inputs = jnp.concatenate([obs, actions], axis=-1)
         next_obs = all_transitions.next_observation[..., :-1]  # We remove the time-to-go component
         if self.predict_difference:
@@ -269,7 +268,6 @@ if __name__ == "__main__":
     from mbrl.utils.offline_data import PendulumOfflineData
     from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
-
     ENTITY = 'trevenl'
 
     env = PendulumEnv(reward_source='dm-control')
@@ -301,11 +299,11 @@ if __name__ == "__main__":
             return {'dt': 0.05}
 
 
-    # offline_data_gen = PendulumOfflineData()
+    offline_data_gen = PendulumOfflineData()
     key = jr.PRNGKey(0)
 
-    # offline_data = offline_data_gen.sample_transitions(key=key,
-    #                                                    num_samples=100)
+    offline_data = offline_data_gen.sample_transitions(key=key,
+                                                       num_samples=100)
 
     offline_data = None
     horizon = 100
