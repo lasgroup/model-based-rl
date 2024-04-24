@@ -9,6 +9,7 @@ from brax.training.types import Transition
 from jax import vmap
 
 from mbrl.envs.pendulum import PendulumEnv
+from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost, AugmentedPipelineState
 
 
 class OfflineData(ABC):
@@ -87,8 +88,65 @@ class PendulumOfflineData(OfflineData):
         return actions
 
 
+class WhenToControlWrapper(OfflineData):
+
+    def __init__(self):
+        base_env = PendulumEnv(reward_source='dm-control')
+        env = IHSwitchCostWrapper(base_env,
+                                  num_integrator_steps=100,
+                                  min_time_between_switches=1 * base_env.dt,
+                                  max_time_between_switches=30 * base_env.dt,
+                                  switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
+                                  time_as_part_of_state=False,
+                                  discounting=1.0
+                                  )
+        super().__init__(env=env)
+
+    def _sample_states(self,
+                       key: chex.PRNGKey,
+                       num_samples: int) -> Float[Array, 'dim_batch dim_state']:
+        key_angle, key_angular_velocity = jr.split(key)
+        angles = jr.uniform(key_angle, shape=(num_samples,), minval=-jnp.pi, maxval=jnp.pi)
+        cos, sin = jnp.cos(angles), jnp.sin(angles)
+        angular_velocity = jr.uniform(key_angular_velocity, shape=(num_samples,), minval=-5, maxval=5)
+        return jnp.stack([cos, sin, angular_velocity], axis=-1)
+
+    def _sample_actions(self,
+                        key: chex.PRNGKey,
+                        num_samples: int) -> Float[Array, 'dim_batch dim_action']:
+        actions = jr.uniform(key=key, shape=(num_samples, self.env.action_size), minval=-1, maxval=1)
+        return actions
+
+    def sample_transitions(self,
+                           key: chex.PRNGKey,
+                           num_samples: int) -> Transition:
+        states = self.sample_states(key=key, num_samples=num_samples)
+        actions = self.sample_actions(key=key, num_samples=num_samples)
+
+        augmented_pipeline_state = AugmentedPipelineState(
+            pipeline_state=jnp.zeros(shape=(num_samples,)),
+            time=jnp.zeros(shape=(num_samples,)),
+        )
+
+        brax_state = State(pipeline_state=augmented_pipeline_state,
+                           obs=states,
+                           reward=jnp.zeros(shape=(num_samples,)),
+                           done=jnp.zeros(shape=(num_samples,)))
+
+        next_states = vmap(self.env.step)(brax_state, actions)
+        transitions = Transition(observation=brax_state.obs,
+                                 action=actions,
+                                 reward=next_states.reward,
+                                 discount=jnp.zeros(shape=(num_samples,)),
+                                 next_observation=next_states.obs
+                                 )
+        return transitions
+
+
+
+
 if __name__ == '__main__':
-    offline_data_gen = PendulumOfflineData()
+    offline_data_gen = WhenToControlWrapper()
     key = jr.PRNGKey(0)
 
-    data = offline_data_gen.sample_transitions(key=key, num_samples=100)
+    data = offline_data_gen.sample_transitions(key=key, num_samples=5)

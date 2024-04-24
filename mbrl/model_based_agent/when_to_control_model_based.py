@@ -22,7 +22,7 @@ class ModelBasedAgentState:
     key: chex.Array
 
 
-class ModelBasedAgent(BaseModelBasedAgent):
+class WhenToControlModelBasedAgent(BaseModelBasedAgent):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -65,17 +65,18 @@ if __name__ == "__main__":
     from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
     from mbpo.optimizers import SACOptimizer
     from distrax import Normal
-    from mbrl.utils.offline_data import PendulumOfflineData
+    from mbrl.utils.offline_data import PendulumOfflineData, WhenToControlWrapper
     from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
+    from wtc.utils import discrete_to_continuous_discounting
 
     ENTITY = 'trevenl'
 
-    env = PendulumEnv(reward_source='dm-control')
+    base_env = PendulumEnv(reward_source='dm-control')
 
-    env = IHSwitchCostWrapper(env,
+    env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=100,
-                              min_time_between_switches=1 * env.dt,
-                              max_time_between_switches=30 * env.dt,
+                              min_time_between_switches=1 * base_env.dt,
+                              max_time_between_switches=30 * base_env.dt,
                               switch_cost=ConstantSwitchCost(value=jnp.array(1.0)),
                               time_as_part_of_state=True)
 
@@ -99,18 +100,18 @@ if __name__ == "__main__":
             return {'dt': 0.05}
 
 
-    offline_data_gen = PendulumOfflineData()
+    offline_data_gen = WhenToControlWrapper()
     key = jr.PRNGKey(0)
 
     offline_data = offline_data_gen.sample_transitions(key=key,
-                                                       num_samples=100)
+                                                       num_samples=10_000)
 
     offline_data = None
     horizon = 100
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size - 1,
         output_dim=env.observation_size - 1 + 1,
-        num_training_steps=3_000,
+        num_training_steps=30_000,
         output_stds=1e-3 * jnp.ones(env.observation_size - 1 + 1),
         features=(64, 64, 64),
         num_particles=5,
@@ -118,14 +119,16 @@ if __name__ == "__main__":
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
-        eval_frequency=1_000,
+        eval_frequency=5_000,
     )
-
+    discount_factor = 0.99
+    continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
+                                                                dt=env.dt)
     sac_kwargs = {
         'num_timesteps': 20_000,
-        'episode_length': 64,
+        'episode_length': 100,
         'num_env_steps_between_updates': 10,
-        'num_envs': 16,
+        'num_envs': 64,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -135,22 +138,27 @@ if __name__ == "__main__":
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 32,
+        'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
-        'min_replay_size': 10 ** 4,
+        'min_replay_size': 10 ** 3,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 10 * 16,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': 10 * 64,  # should be num_envs * num_env_steps_between_updates
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (64, 64),
+        'policy_hidden_layer_sizes': (32,) * 5,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (64, 64),
+        'critic_hidden_layer_sizes': (128,) * 3,
         'critic_activation': swish,
         'wandb_logging': True,
         'return_best_model': True,
+        # 'non_equidistant_time': True,
+        # 'continuous_discounting': continuous_discounting,
+        # 'min_time_between_switches': 1 * base_env.dt,
+        # 'max_time_between_switches': 30 * base_env.dt,
+        # 'env_dt': env.dt,
     }
     max_replay_size_true_data_buffer = 10 ** 4
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
@@ -172,7 +180,7 @@ if __name__ == "__main__":
                dir='/cluster/scratch/' + ENTITY,
                )
 
-    agent = ModelBasedAgent(
+    agent = WhenToControlModelBasedAgent(
         env=env,
         eval_env=env,
         statistical_model=model,
