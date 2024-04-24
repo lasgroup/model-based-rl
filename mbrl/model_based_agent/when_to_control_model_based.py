@@ -71,6 +71,7 @@ if __name__ == "__main__":
     from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
     from wtc.utils import discrete_to_continuous_discounting
 
+    log_wandb = False
     ENTITY = 'trevenl'
 
     base_env = PendulumEnv(reward_source='dm-control')
@@ -93,7 +94,6 @@ if __name__ == "__main__":
                      reward_params: RewardParams,
                      x_next: chex.Array | None = None
                      ):
-            assert x.shape == (5,) and u.shape == (2,)
             reward = jnp.array(-1.0)
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
@@ -113,11 +113,11 @@ if __name__ == "__main__":
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size,
         output_dim=env.observation_size + 1 - 1,  # One more for the reward -1 for env time
-        num_training_steps=30_000,
+        num_training_steps=1_000,
         output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # One more for the reward -1 for env_time
         features=(64, 64, 64),
         num_particles=5,
-        logging_wandb=True,
+        logging_wandb=log_wandb,
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (128,) * 3,
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
         # 'non_equidistant_time': True,
         # 'continuous_discounting': continuous_discounting,
@@ -177,10 +177,10 @@ if __name__ == "__main__":
     optimizer = SACOptimizer(system=None,
                              true_buffer=sac_buffer,
                              **sac_kwargs)
-
-    wandb.init(project="Model-based Agent",
-               dir='/cluster/scratch/' + ENTITY,
-               )
+    if log_wandb:
+        wandb.init(project="Model-based Agent",
+                   dir='/cluster/scratch/' + ENTITY,
+                   )
 
     agent = WhenToControlModelBasedAgent(
         env=env,
@@ -192,7 +192,7 @@ if __name__ == "__main__":
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
-        log_to_wandb=True,
+        log_to_wandb=log_wandb,
     )
 
     agent_state = agent.run_episodes(num_episodes=20,

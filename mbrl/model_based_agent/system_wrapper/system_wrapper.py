@@ -126,7 +126,7 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
         assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
         # state, reward, current_time = x[:-2], x[-2], x[-1]
         # action, pseudo_time_for_action = u[:-1], u[-1]
-        state, current_time = x[:-2], x[-1]
+        state, current_time = x[:-1], x[-1]
         pseudo_time_for_action = u[-1]
         # Now we transform pseudo_time_for_action to time for action
         time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
@@ -395,7 +395,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
              ) -> SystemState:
         """
 
-        :param x: current state of the system [system_state, integrated_reward, current_time]
+        :param x: current state of the system [system_state, current_time]
         :param u: current action of the system [system_action, time_for_control]
         :param system_params: parameters of the system
         :return: Tuple of next state, reward, updated system parameters
@@ -417,7 +417,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
         done = jnp.array(x_next[-1] >= 5.0).astype(
             float)  # TODO: this works only for Pendulum, add horizon as a parameter
         new_system_state = SystemState(
-            x_next=x_next,
+            x_next=jnp.concatenate([next_system_state, current_time.reshape(1)]),
             reward=reward,
             system_params=new_systems_params,
             done=done,
