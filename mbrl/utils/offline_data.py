@@ -90,15 +90,19 @@ class PendulumOfflineData(OfflineData):
 
 class WhenToControlWrapper(OfflineData):
 
-    def __init__(self):
+    def __init__(self,
+                 num_integrator_steps: int,
+                 min_time_between_switches,
+                 max_time_between_switches
+                 ):
         base_env = PendulumEnv(reward_source='dm-control')
         env = IHSwitchCostWrapper(base_env,
-                                  num_integrator_steps=100,
-                                  min_time_between_switches=1 * base_env.dt,
-                                  max_time_between_switches=30 * base_env.dt,
+                                  num_integrator_steps=num_integrator_steps,
+                                  min_time_between_switches=min_time_between_switches,
+                                  max_time_between_switches=max_time_between_switches,
                                   switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
                                   time_as_part_of_state=True,
-                                  discounting=1.0
+                                  discounting=0.99
                                   )
         super().__init__(env=env)
 
@@ -109,9 +113,8 @@ class WhenToControlWrapper(OfflineData):
         angles = jr.uniform(key_angle, shape=(num_samples,), minval=-jnp.pi, maxval=jnp.pi)
         cos, sin = jnp.cos(angles), jnp.sin(angles)
         angular_velocity = jr.uniform(key_angular_velocity, shape=(num_samples,), minval=-5, maxval=5)
-        current_times = jr.uniform(key=key, shape=(num_samples,),
-                                   minval=0, maxval=5.0)  # TODO: works only for Pendulum
-        return jnp.stack([cos, sin, angular_velocity, current_times], axis=-1)
+        env_times = jnp.zeros(shape=(num_samples,))
+        return jnp.stack([cos, sin, angular_velocity, env_times], axis=-1)
 
     def _sample_actions(self,
                         key: chex.PRNGKey,
