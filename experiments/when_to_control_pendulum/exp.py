@@ -1,112 +1,34 @@
+import argparse
+
 import chex
 import jax.numpy as jnp
 import jax.random as jr
 import wandb
-from brax.training.replay_buffers import UniformSamplingQueue, ReplayBufferState
+from brax.training.replay_buffers import UniformSamplingQueue
 from brax.training.types import Transition
-from bsm.utils.normalization import Data
+from bsm.bayesian_regression import DeterministicEnsemble
+from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+from distrax import Normal
 from jax.nn import swish
-from mbpo.optimizers.base_optimizer import BaseOptimizer
+from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-from mbpo.utils.type_aliases import OptimizerState
+from wtc.utils import discrete_to_continuous_discounting
+from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
-from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
-from mbrl.model_based_agent.system_wrapper import TransitionCostDynamics, TransitionCostPetsSystem
-from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent
+from mbrl.envs.pendulum import PendulumEnv
+from mbrl.utils.offline_data import WhenToControlWrapper
+from mbrl.model_based_agent.when_to_control_model_based import WhenToControlModelBasedAgent
 
-
-@chex.dataclass
-class ModelBasedAgentState:
-    optimizer_state: OptimizerState
-    env_steps: chex.Array
-    key: chex.Array
+log_wandb = True
+ENTITY = 'trevenl'
 
 
-class WhenToControlModelBasedAgent(BaseModelBasedAgent):
-
-    def __init__(self,
-                 dt: float,
-                 min_time_between_switches: float,
-                 max_time_between_switches: float,
-                 episode_time: float,
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dt = dt
-        self.min_time_between_switches = min_time_between_switches
-        self.max_time_between_switches = max_time_between_switches
-        self.episode_time = episode_time
-
-    def prepare_actor(self,
-                      optimizer: BaseOptimizer,
-                      ) -> Actor:
-        dynamics, system, actor = TransitionCostDynamics, TransitionCostPetsSystem, PetsActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
-                            x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
-        system = system(dynamics=dynamics,
-                        reward=self.reward_model, )
-        actor = actor(env_observation_size=self.env.observation_size,
-                      env_action_size=self.env.action_size,
-                      optimizer=optimizer)
-        actor.set_system(system=system)
-        return actor
-
-    @staticmethod
-    def compute_time(pseudo_time: chex.Array,
-                     dt: float,
-                     t_min: float,
-                     t_max: float,
-                     env_time: chex.Array,
-                     time_horizon: float
-                     ) -> chex.Array:
-        time_for_action = ((t_max - t_min) / 2 * pseudo_time + (t_max + t_min) / 2)
-        return jnp.minimum((time_for_action // dt) * dt, time_horizon - env_time)
-
-    def _collected_buffer_to_train_data(self,
-                                        collected_buffer_state: ReplayBufferState):
-        idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
-        all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
-        all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
-        # obs = [env_state, env_times]
-        obs = all_transitions.observation
-        # action = [env_action, time_to_control]
-        actions = all_transitions.action
-
-        env_states, env_times = obs[..., :-1], obs[..., 1]
-        env_actions, pseudo_times_for_action = actions[..., :-1], actions[..., 1]
-        rewards = all_transitions.reward.reshape(-1, 1)  # This should be only integrated reward
-
-        times_for_action = self.compute_time(pseudo_times_for_action,
-                                             dt=self.dt,
-                                             t_min=self.min_time_between_switches,
-                                             t_max=self.max_time_between_switches,
-                                             env_time=env_times,
-                                             time_horizon=self.episode_time)
-
-        inputs = jnp.concatenate([env_states, env_actions, times_for_action[..., None]], axis=-1)
-        env_states_next = all_transitions.next_observation[..., :-1]  # We remove time_to_go
-        if self.predict_difference:
-            target = env_states_next - env_states
-        else:
-            target = env_states_next
-        outputs = jnp.concatenate([target, rewards], axis=-1)  # append the integrated reward to the output
-        return Data(inputs=inputs, outputs=outputs)
-
-
-if __name__ == "__main__":
-    from mbrl.envs.pendulum import PendulumEnv
-    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-    from mbpo.optimizers import SACOptimizer
-    from distrax import Normal
-    from mbrl.utils.offline_data import PendulumOfflineData, WhenToControlWrapper
-    from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
-    from wtc.utils import discrete_to_continuous_discounting
-    from bsm.bayesian_regression import DeterministicEnsemble
-
-    log_wandb = True
-    ENTITY = 'trevenl'
-
+def experiment(project_name: str = 'GPUSpeedTest',
+               num_offline_samples: int = 100,
+               sac_horizon: int = 100,
+               deterministic_policy_for_data_collection: bool = False,
+               seed: int = 42,
+               ):
     base_env = PendulumEnv(reward_source='dm-control')
 
     min_time_between_switches = 1 * base_env.dt
@@ -122,7 +44,6 @@ if __name__ == "__main__":
                               time_as_part_of_state=True)
 
     episode_time = base_env.dt * num_integrator_steps
-
 
     class TransitionReward(Reward):
         def __init__(self):
@@ -141,7 +62,6 @@ if __name__ == "__main__":
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': 0.05}
 
-
     offline_data_gen = WhenToControlWrapper(
         num_integrator_steps=num_integrator_steps,
         min_time_between_switches=min_time_between_switches,
@@ -150,7 +70,7 @@ if __name__ == "__main__":
     key = jr.PRNGKey(0)
 
     offline_data = offline_data_gen.sample_transitions(key=key,
-                                                       num_samples=100)
+                                                       num_samples=num_offline_samples)
 
     horizon = 100
     model = BNNStatisticalModel(
@@ -175,7 +95,7 @@ if __name__ == "__main__":
                                                                 dt=env.dt)
     sac_kwargs = {
         'num_timesteps': 100_000,
-        'episode_length': 100,
+        'episode_length': sac_horizon,
         'num_env_steps_between_updates': 10,
         'num_envs': 64,
         'num_eval_envs': 4,
@@ -225,7 +145,7 @@ if __name__ == "__main__":
                              true_buffer=sac_buffer,
                              **sac_kwargs)
     if log_wandb:
-        wandb.init(project="ModelBasedTest",
+        wandb.init(project=project_name,
                    dir='/cluster/scratch/' + ENTITY,
                    )
 
@@ -244,10 +164,31 @@ if __name__ == "__main__":
         min_time_between_switches=min_time_between_switches,
         max_time_between_switches=max_time_between_switches,
         episode_time=episode_time,
+        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
     )
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,
-                                     key=jr.PRNGKey(0))
+                                     key=jr.PRNGKey(seed))
 
     wandb.finish()
+
+
+def main(args):
+    experiment(project_name=args.project_name,
+               num_offline_samples=args.num_offline_samples,
+               sac_horizon=args.sac_horizon,
+               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               seed=args.seed)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project_name', type=str, default='Model_based_pets')
+    parser.add_argument('--num_offline_samples', type=int, default=100)
+    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=42)
+
+    args = parser.parse_args()
+    main(args)
