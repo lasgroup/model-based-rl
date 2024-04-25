@@ -67,9 +67,10 @@ def experiment(project_name: str = 'GPUSpeedTest',
         min_time_between_switches=min_time_between_switches,
         max_time_between_switches=max_time_between_switches
     )
-    key = jr.PRNGKey(0)
 
-    offline_data = offline_data_gen.sample_transitions(key=key,
+    key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
+
+    offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                        num_samples=num_offline_samples)
 
     horizon = 100
@@ -169,7 +170,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,
-                                     key=jr.PRNGKey(seed))
+                                     key=key_agent)
 
     wandb.finish()
 
