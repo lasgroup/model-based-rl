@@ -150,16 +150,15 @@ if __name__ == "__main__":
     key = jr.PRNGKey(0)
 
     offline_data = offline_data_gen.sample_transitions(key=key,
-                                                       num_samples=10_000)
+                                                       num_samples=100)
 
-    offline_data = None
     horizon = 100
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
         output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
         num_training_steps=30_000,
         output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
-        beta=1.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
+        beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
         features=(64,) * 3,
         bnn_type=DeterministicEnsemble,
         num_particles=5,
@@ -204,11 +203,11 @@ if __name__ == "__main__":
         'critic_activation': swish,
         'wandb_logging': log_wandb,
         'return_best_model': True,
-        # 'non_equidistant_time': True,
-        # 'continuous_discounting': continuous_discounting,
-        # 'min_time_between_switches': 1 * base_env.dt,
-        # 'max_time_between_switches': 30 * base_env.dt,
-        # 'env_dt': env.dt,
+        'non_equidistant_time': True,
+        'continuous_discounting': continuous_discounting,
+        'min_time_between_switches': min_time_between_switches,
+        'max_time_between_switches': max_time_between_switches,
+        'env_dt': env.dt,
     }
     max_replay_size_true_data_buffer = 10 ** 4
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
@@ -226,7 +225,7 @@ if __name__ == "__main__":
                              true_buffer=sac_buffer,
                              **sac_kwargs)
     if log_wandb:
-        wandb.init(project="Model-based Agent",
+        wandb.init(project="ModelBasedTest",
                    dir='/cluster/scratch/' + ENTITY,
                    )
 
