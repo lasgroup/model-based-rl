@@ -89,6 +89,8 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                  predict_difference: bool = True,
                  min_time_between_switches: float = 0.05,
                  max_time_between_switches: float = 1.5,
+                 dt: float = 0.05,
+                 episode_time: float = 5.0,
                  # TODO: this works ONLY!!! for pendulum, change min and max time passing
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
@@ -99,6 +101,8 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
         self.predict_difference = predict_difference
         self.min_time_between_switches = min_time_between_switches
         self.max_time_between_switches = max_time_between_switches
+        self.dt = dt
+        self.episode_time = episode_time
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
         return DynamicsParams(
@@ -113,27 +117,33 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
 
     @staticmethod
     def pseudo_to_real_time(pseudo_time: chex.Array,
-                            t_lower: float,
-                            t_upper: float,
+                            dt: float,
+                            t_min: float,
+                            t_max: float,
+                            env_time: chex.Array,
+                            episode_time: float
                             ) -> chex.Array:
-        time_for_action = ((t_upper - t_lower) / 2 * pseudo_time + (t_upper + t_lower) / 2)
-        return time_for_action
+        time_for_action = ((t_max - t_min) / 2 * pseudo_time + (t_max + t_min) / 2)
+        return jnp.minimum((time_for_action // dt) * dt, episode_time - env_time)
 
     def next_state(self,
                    x: chex.Array,
                    u: chex.Array,
                    dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
         assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        # state, reward, current_time = x[:-2], x[-2], x[-1]
-        # action, pseudo_time_for_action = u[:-1], u[-1]
-        state, current_time = x[:-1], x[-1]
-        pseudo_time_for_action = u[-1]
+        # env_state, env_time = x[:-1], x[-1]
+        # env_action, pseudo_time_for_action = u[:-1], u[-1]
+        env_state, env_time = x[:-1], x[-1]
+        env_action, pseudo_time_for_action = u[:-1], u[-1]
         # Now we transform pseudo_time_for_action to time for action
         time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
-                                                   self.min_time_between_switches,
-                                                   self.max_time_between_switches)
+                                                   dt=self.dt,
+                                                   t_min=self.min_time_between_switches,
+                                                   t_max=self.max_time_between_switches,
+                                                   env_time=env_time,
+                                                   episode_time=self.episode_time)
         # Prepare statistical model input
-        sm_input = jnp.concatenate([state, current_time.reshape(1), u])
+        sm_input = jnp.concatenate([env_state, env_action, time_for_action[..., None]])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
 
         model_output = self.statistical_model(input=sm_input,
@@ -142,17 +152,17 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
         # dist for [system_state, reward]
         pred_dist = Normal(loc=model_output.mean, scale=scale_std)
         pred_sample = pred_dist.sample(seed=key_sample_x_next)
-        pred_sample_state, pred_sample_reward = pred_sample[:-1], pred_sample[-1]
+        pred_sample_state, integrated_reward = pred_sample[:-1], pred_sample[-1]
         if self.predict_difference:
-            state_next = state + pred_sample_state
+            env_state_next = env_state + pred_sample_state
         else:
-            state_next = pred_sample_state
+            env_state_next = pred_sample_state
 
-        # what if this becomes negative
-        current_time = jnp.clip(current_time + time_for_action, a_min=0).reshape(1)
-        augmented_x_next = jnp.concatenate([state_next,
-                                            pred_sample_reward.reshape(1),
-                                            current_time,
+        # what if this becomes negative (shouldn't since we take care for this above), just as safety
+        env_time_next = jnp.clip(env_time + time_for_action, a_min=0).reshape(1)
+        augmented_x_next = jnp.concatenate([env_state_next,
+                                            integrated_reward.reshape(1),
+                                            env_time_next,
                                             ])
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
@@ -404,9 +414,9 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
         x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
         next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
         x_next = x_next_dist.sample(seed=next_state_key)
-        assert x_next.shape == (self.x_dim + 1,)
+        assert x_next.shape == (self.x_dim + 1,) # We add the integrated reward to x_next
         # We split the x_next into next state and integrated reward
-        next_system_state, integrated_reward, current_time = x_next[:-2], x_next[-2], x_next[-1]
+        env_state_next, integrated_reward, env_time_next = x_next[:-2], x_next[-2], x_next[-1]
         reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
         reward = reward_dist.sample(seed=reward_key)
         reward = reward + integrated_reward
@@ -414,10 +424,10 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
                                                    reward_params=new_reward_params,
                                                    key=new_systems_key)
         # We are done if current_time >= Horizon time
-        done = jnp.array(x_next[-1] >= 5.0).astype(
+        done = jnp.array(x_next[-1] >= self.dynamics.episode_time).astype(
             float)  # TODO: this works only for Pendulum, add horizon as a parameter
         new_system_state = SystemState(
-            x_next=jnp.concatenate([next_system_state, current_time.reshape(1)]),
+            x_next=jnp.concatenate([env_state_next, env_time_next.reshape(1)]),
             reward=reward,
             system_params=new_systems_params,
             done=done,
