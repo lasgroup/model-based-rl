@@ -93,8 +93,6 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
                  episode_time: float = 5.0,
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
-        self.x_dim = self.x_dim
-        self.u_dim = self.u_dim
         self.statistical_model = statistical_model
         self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
         self.predict_difference = predict_difference
@@ -179,6 +177,60 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
         param_key, model_state_key = jr.split(key, 2)
         model_state = self.statistical_model.init(model_state_key)
         return DynamicsParams(key=key, statistical_model_state=model_state)
+
+
+class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.u_dim = self.x_dim + self.u_dim
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # env_state, env_time = x[:-1], x[-1]
+        # env_action, pseudo_time_for_action = u[:-1], u[-1]
+        env_state, env_time = x[:-1], x[-1]
+        # Control represents the first self.u_dim, the rest is the eta for env_state and integrated reward that we learn
+        u, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
+        env_action, pseudo_time_for_action = u[:-1], u[-1]
+        # Now we transform pseudo_time_for_action to time for action
+        time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
+                                                   dt=self.dt,
+                                                   t_min=self.min_time_between_switches,
+                                                   t_max=self.max_time_between_switches,
+                                                   env_time=env_time,
+                                                   episode_time=self.episode_time)
+        # Prepare statistical model input
+        sm_input = jnp.concatenate([env_state, env_action, time_for_action[..., None]])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+
+        model_output = self.statistical_model(input=sm_input,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+
+        optimistic_pred = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+        optimistic_env_state_next, optimistic_integrated_reward = optimistic_pred[..., :-1], optimistic_pred[..., -1]
+        if self.predict_difference:
+            optimistic_env_state_next = env_state + optimistic_env_state_next
+
+        # what if this becomes negative (shouldn't since we take care for this above), just as safety
+        env_time_next = jnp.clip(env_time + time_for_action, a_min=0).reshape(1)
+        augmented_x_next = jnp.concatenate([optimistic_env_state_next,
+                                            optimistic_integrated_reward.reshape(1),
+                                            env_time_next,
+                                            ])
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        # Part of aleatoric uncertainty in time is equal to 0
+        aleatoric_std = jnp.concatenate([model_output.aleatoric_std[:-1],
+                                         model_output.aleatoric_std[-1].reshape(1, ),
+                                         jnp.zeros(shape=(1,)),
+                                         ])
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+
+        return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
 
 
 class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
@@ -447,6 +499,47 @@ class WtcScPetsSystem(System, Generic[ModelState, RewardParams]):
 
     def system_params_vmap_axes(self, axes: int = 0):
         return self.vmap_input_axis(data_axis=axes)
+
+
+class WtcScOptimisticSystem(WtcScPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: WtcScOptimisticDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: SystemParams[ModelState, RewardParams],
+             ) -> SystemState:
+        """
+
+        :param x: current state of the system [system_state, current_time]
+        :param u: current action of the system [system_action, time_for_control]
+        :param system_params: parameters of the system
+        :return: Tuple of next state, reward, updated system parameters
+        """
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
+        next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
+        x_next = x_next_dist.sample(seed=next_state_key)
+        assert x_next.shape == (self.x_dim + 1,)  # We add the integrated reward to x_next
+        # We split the x_next into next state and integrated reward
+        env_state_next, integrated_reward, env_time_next = x_next[:-2], x_next[-2], x_next[-1]
+        reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], system_params.reward_params,
+                                                     x_next)
+        reward = reward_dist.sample(seed=reward_key)
+        reward = reward + integrated_reward
+        new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
+                                                   reward_params=new_reward_params,
+                                                   key=new_systems_key)
+        # We are done if current_time >= Horizon time
+        done = jnp.array(x_next[-1] >= self.dynamics.episode_time).astype(float)
+        new_system_state = SystemState(
+            x_next=jnp.concatenate([env_state_next, env_time_next.reshape(1)]),
+            reward=reward,
+            system_params=new_systems_params,
+            done=done,
+        )
+        return new_system_state
 
 
 @chex.dataclass
