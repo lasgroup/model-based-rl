@@ -91,7 +91,8 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
                  max_time_between_switches: float = 1.5,
                  dt: float = 0.05,
                  episode_time: float = 5.0,
-                 running_reward_bound: float = 1e5
+                 running_reward_max_bound: float = 1e5,
+                 running_reward_min_bound: float = -1e5
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.statistical_model = statistical_model
@@ -101,7 +102,8 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
         self.max_time_between_switches = max_time_between_switches
         self.dt = dt
         self.episode_time = episode_time
-        self.running_reward_bound = running_reward_bound
+        self.running_reward_max_bound = running_reward_max_bound
+        self.running_reward_min_bound = running_reward_min_bound
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
         return DynamicsParams(
@@ -152,7 +154,9 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
         pred_dist = Normal(loc=model_output.mean, scale=scale_std)
         pred_sample = pred_dist.sample(seed=key_sample_x_next)
         pred_sample_state, integrated_reward = pred_sample[:-1], pred_sample[-1]
-        integrated_reward = jnp.clip(integrated_reward, a_min=0, a_max=time_for_action * self.running_reward_bound)
+        integrated_reward = jnp.clip(integrated_reward,
+                                     a_min=time_for_action * self.running_reward_min_bound,
+                                     a_max=time_for_action * self.running_reward_max_bound)
         if self.predict_difference:
             env_state_next = env_state + pred_sample_state
         else:
@@ -210,7 +214,10 @@ class WtsScMeanDynamics(WtsScPetsDynamics, Generic[ModelState]):
                                               statistical_model_state=dynamics_params.statistical_model_state)
         # dist for [system_state, reward]
         env_state_next, integrated_reward = model_output.mean[:-1], model_output.mean[-1]
-        integrated_reward = jnp.clip(integrated_reward, a_min=0, a_max=time_for_action * self.running_reward_bound)
+        integrated_reward = jnp.clip(integrated_reward,
+                                     a_min=time_for_action * self.running_reward_min_bound,
+                                     a_max=time_for_action * self.running_reward_max_bound)
+
         if self.predict_difference:
             env_state_next = env_state + env_state_next
 
@@ -265,8 +272,10 @@ class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
 
         optimistic_pred = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
         optimistic_env_state_next, optimistic_integrated_reward = optimistic_pred[..., :-1], optimistic_pred[..., -1]
-        optimistic_integrated_reward = jnp.clip(optimistic_integrated_reward, a_min=0,
-                                                a_max=time_for_action * self.running_reward_bound)
+
+        optimistic_integrated_reward = jnp.clip(optimistic_integrated_reward,
+                                                a_min=time_for_action * self.running_reward_min_bound,
+                                                a_max=time_for_action * self.running_reward_max_bound)
 
         if self.predict_difference:
             optimistic_env_state_next = env_state + optimistic_env_state_next

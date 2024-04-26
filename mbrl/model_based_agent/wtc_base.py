@@ -27,9 +27,11 @@ class WtcBaseModelBasedAgent(BaseModelBasedAgent):
                  max_time_between_switches: float,
                  episode_time: float,
                  *args,
-                 running_reward_bound: float = 1e5,
+                 running_reward_max_bound: float = 1e5,
+                 running_reward_min_bound: float = -1e5,
                  **kwargs):
-        self.running_reward_bound = running_reward_bound
+        self.running_reward_max_bound = running_reward_max_bound
+        self.running_reward_min_bound = running_reward_min_bound
         self.dt = dt
         self.min_time_between_switches = min_time_between_switches
         self.max_time_between_switches = max_time_between_switches
@@ -49,7 +51,8 @@ class WtcBaseModelBasedAgent(BaseModelBasedAgent):
                           actor,
                           ) -> Actor:
         dynamics = dynamics(statistical_model=self.statistical_model,
-                            running_reward_bound=self.running_reward_bound,
+                            running_reward_max_bound=self.running_reward_max_bound,
+                            running_reward_min_bound=self.running_reward_min_bound,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
                             min_time_between_switches=self.min_time_between_switches,

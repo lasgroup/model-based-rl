@@ -56,7 +56,8 @@ if __name__ == "__main__":
     max_time_between_switches = 30 * base_env.dt
     num_integrator_steps = 100
     switch_cost = 0.1
-    running_reward_bound = 20.0
+    running_reward_max_bound = 20.0
+    running_reward_min_bound = -5
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=num_integrator_steps,
@@ -188,8 +189,8 @@ if __name__ == "__main__":
         min_time_between_switches=min_time_between_switches,
         max_time_between_switches=max_time_between_switches,
         episode_time=episode_time,
-        running_reward_bound=running_reward_bound
-    )
+        running_reward_max_bound=running_reward_max_bound,
+        running_reward_min_bound=running_reward_min_bound    )
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,

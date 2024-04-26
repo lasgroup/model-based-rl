@@ -94,7 +94,8 @@ if __name__ == "__main__":
 
     offline_data = offline_data_gen.sample_transitions(key=key,
                                                        num_samples=100)
-    running_reward_bound = 20.0
+    running_reward_max_bound = 20.0
+    running_reward_min_bound = -5
     horizon = 100
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
@@ -187,7 +188,8 @@ if __name__ == "__main__":
         min_time_between_switches=min_time_between_switches,
         max_time_between_switches=max_time_between_switches,
         episode_time=episode_time,
-        running_reward_bound=running_reward_bound
+        running_reward_max_bound=running_reward_max_bound,
+        running_reward_min_bound=running_reward_min_bound
     )
 
     agent_state = agent.run_episodes(num_episodes=20,
