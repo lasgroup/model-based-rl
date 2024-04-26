@@ -47,6 +47,7 @@ class BaseModelBasedAgent(ABC):
                  key: chex.PRNGKey = jr.PRNGKey(0),
                  log_to_wandb: bool = False,
                  deterministic_policy_for_data_collection: bool = False,
+                 first_episode_for_policy_training: int = -1,
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -64,6 +65,7 @@ class BaseModelBasedAgent(ABC):
         self.key = key
         self.log_to_wandb = log_to_wandb
         self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
+        self.first_episode_for_policy_training = first_episode_for_policy_training
 
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(
@@ -213,10 +215,11 @@ class BaseModelBasedAgent(ABC):
             agent_state = self.train_dynamics_model(agent_state=agent_state,
                                                     episode_idx=episode_idx)
             print(f'End of dynamics training')
-            print(f'Start of policy training')
-            agent_state = self.train_policy(agent_state=agent_state,
-                                            episode_idx=episode_idx)
-            print(f'End of policy training')
+            if episode_idx >= self.first_episode_for_policy_training:
+                print(f'Start of policy training')
+                agent_state = self.train_policy(agent_state=agent_state,
+                                                episode_idx=episode_idx)
+                print(f'End of policy training')
         # We collect new data with the current policy
         print(f'Start of data collection')
         agent_state = self.simulate_on_true_env(agent_state=agent_state)
@@ -245,4 +248,3 @@ class BaseModelBasedAgent(ABC):
                                           episode_idx=episode_idx)
             print(f'End of Episode {episode_idx}')
         return agent_state
-
