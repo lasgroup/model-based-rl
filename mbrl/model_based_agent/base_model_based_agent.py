@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from functools import partial
 
 import chex
@@ -94,6 +94,7 @@ class BaseModelBasedAgent(ABC):
 
         return collected_data_buffer
 
+    @abstractmethod
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
