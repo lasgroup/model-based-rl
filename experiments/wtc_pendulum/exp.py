@@ -16,9 +16,8 @@ from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
 from mbrl.envs.pendulum import PendulumEnv
-from mbrl.utils.offline_data import WhenToControlWrapper
-from mbrl.model_based_agent.when_to_control_model_based import WhenToControlModelBasedAgent
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
+from mbrl.utils.offline_data import WhenToControlWrapper
 
 log_wandb = True
 ENTITY = 'trevenl'
@@ -33,7 +32,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                sac_steps: int = 1_000_000,
                bnn_steps: int = 5_000,
                first_episode_for_policy_training: int = -1,
-               exploration: str = 'optimistic'  # Should be one of the ['optimistic', 'pets', 'mean']
+               exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
+               reset_statistical_model: bool = True
                ):
     assert exploration in ['optimistic', 'pets',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -45,7 +45,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   sac_steps=sac_steps,
                   bnn_steps=bnn_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
-                  exploration=exploration
+                  exploration=exploration,
+                  reset_statistical_model=reset_statistical_model
                   )
 
     base_env = PendulumEnv(reward_source='dm-control')
@@ -156,7 +157,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
                               action=jnp.zeros(shape=(env.action_size,)),
                               reward=jnp.array(0.0),
-                              discount=jnp.array(0.99),
+                              discount=jnp.array(discount_factor),
                               next_observation=jnp.ones(env.observation_size))
 
     sac_buffer = UniformSamplingQueue(
@@ -198,7 +199,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         running_reward_max_bound=running_reward_max_bound,
         running_reward_min_bound=running_reward_min_bound,
-        first_episode_for_policy_training=first_episode_for_policy_training
+        first_episode_for_policy_training=first_episode_for_policy_training,
+        reset_statistical_model=reset_statistical_model,
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -219,6 +221,7 @@ def main(args):
                bnn_steps=args.bnn_steps,
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
+               reset_statistical_model=bool(args.reset_statistical_model),
                )
 
 
@@ -234,6 +237,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='mean')
+    parser.add_argument('--reset_statistical_model', type=int, default=0)
 
     args = parser.parse_args()
     main(args)

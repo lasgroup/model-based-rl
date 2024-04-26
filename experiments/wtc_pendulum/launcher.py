@@ -2,24 +2,18 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['MBWTC_Apr25_16_30'],
-    'num_offline_samples': [0, 100, 200, 500, 1000, 5000],
-    'sac_horizon': [32, 64, 100, 128, ],
-    'deterministic_policy_for_data_collection': [0, 1],
+    'project_name': ['MBWTC_Apr26_15_00'],
+    'num_offline_samples': [0, ],
+    'sac_horizon': [64, ],
+    'deterministic_policy_for_data_collection': [0, ],
     'seed': list(range(5)),
-    'num_episodes': [20, ],
-    'sac_steps': [100_000, 1_000_000, ]
+    'num_episodes': [40, ],
+    'sac_steps': [100_000, 1_000_000, ],
+    'bnn_steps': [5_000, 10_000, 30_000],
+    'first_episode_for_policy_training': [2, ],
+    'exploration': ['optimistic', 'pets', 'mean'],
+    'reset_statistical_model': [0, 1]
 }
-
-
-# general_configs = {
-#     'project_name': ['test-project'],
-#     'num_offline_samples': [500,],
-#     'sac_horizon': [100, ],
-#     'deterministic_policy_for_data_collection': [0,],
-#     'seed': list(range(1)),
-#     'num_episodes': [5, ]
-# }
 
 
 def main():
