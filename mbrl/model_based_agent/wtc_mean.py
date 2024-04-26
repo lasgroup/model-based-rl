@@ -190,7 +190,7 @@ if __name__ == "__main__":
         max_time_between_switches=max_time_between_switches,
         episode_time=episode_time,
         running_reward_max_bound=running_reward_max_bound,
-        running_reward_min_bound=running_reward_min_bound    )
+        running_reward_min_bound=running_reward_min_bound)
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,

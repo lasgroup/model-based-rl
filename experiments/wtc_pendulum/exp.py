@@ -18,6 +18,7 @@ from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCo
 from mbrl.envs.pendulum import PendulumEnv
 from mbrl.utils.offline_data import WhenToControlWrapper
 from mbrl.model_based_agent.when_to_control_model_based import WhenToControlModelBasedAgent
+from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
 
 log_wandb = True
 ENTITY = 'trevenl'
@@ -30,13 +31,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
                seed: int = 42,
                num_episodes: int = 20,
                sac_steps: int = 1_000_000,
+               bnn_steps: int = 5_000,
+               first_episode_for_policy_training: int = -1,
+               exploration: str = 'optimistic'  # Should be one of the ['optimistic', 'pets', 'mean']
                ):
+    assert exploration in ['optimistic', 'pets',
+                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   seed=seed,
                   num_episodes=num_episodes,
-                  sac_steps=sac_steps
+                  sac_steps=sac_steps,
+                  bnn_steps=bnn_steps,
+                  first_episode_for_policy_training=first_episode_for_policy_training,
+                  exploration=exploration
                   )
 
     base_env = PendulumEnv(reward_source='dm-control')
@@ -45,6 +54,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
     max_time_between_switches = 30 * base_env.dt
     num_integrator_steps = 100
     switch_cost = 0.1
+
+    running_reward_max_bound = 20.0
+    running_reward_min_bound = -5
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=num_integrator_steps,
@@ -87,7 +99,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
         output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
-        num_training_steps=5000,
+        num_training_steps=bnn_steps,
         output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
         beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
         features=(64,) * 3,
@@ -160,7 +172,15 @@ def experiment(project_name: str = 'GPUSpeedTest',
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
 
-    agent = WhenToControlModelBasedAgent(
+    agent_class = None
+    if exploration == 'optimistic':
+        agent_class = WtcOptimistic
+    elif exploration == 'mean':
+        agent_class = WtcMean
+    elif exploration == 'pets':
+        agent_class = WtcPets
+
+    agent = agent_class(
         env=env,
         eval_env=env,
         statistical_model=model,
@@ -175,7 +195,10 @@ def experiment(project_name: str = 'GPUSpeedTest',
         min_time_between_switches=min_time_between_switches,
         max_time_between_switches=max_time_between_switches,
         episode_time=episode_time,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
+        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+        running_reward_max_bound=running_reward_max_bound,
+        running_reward_min_bound=running_reward_min_bound,
+        first_episode_for_policy_training=first_episode_for_policy_training
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -192,7 +215,11 @@ def main(args):
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                seed=args.seed,
                num_episodes=args.num_episodes,
-               sac_steps=args.sac_steps)
+               sac_steps=args.sac_steps,
+               bnn_steps=args.bnn_steps,
+               first_episode_for_policy_training=args.first_episode_for_policy_training,
+               exploration=args.exploration,
+               )
 
 
 if __name__ == '__main__':
@@ -203,7 +230,10 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
-    parser.add_argument('--sac_steps', type=int, default=100_000)
+    parser.add_argument('--sac_steps', type=int, default=20_000)
+    parser.add_argument('--bnn_steps', type=int, default=5_000)
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
+    parser.add_argument('--exploration', type=str, default='mean')
 
     args = parser.parse_args()
     main(args)
