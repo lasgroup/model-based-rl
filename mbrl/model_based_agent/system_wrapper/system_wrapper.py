@@ -80,7 +80,7 @@ class PetsDynamics(Dynamics, Generic[ModelState]):
         return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
-class TransitionCostDynamics(Dynamics, Generic[ModelState]):
+class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
     def __init__(self,
                  x_dim: int,
                  u_dim: int,
@@ -389,8 +389,8 @@ class OptimisticSystem(PetsSystem, Generic[ModelState, RewardParams]):
         return reward, new_reward_params
 
 
-class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: TransitionCostDynamics[ModelState], reward: Reward[RewardParams]):
+class WtcScPetsSystem(System, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: WtsScPetsDynamics[ModelState], reward: Reward[RewardParams]):
         super().__init__(dynamics, reward)
         self.dynamics = dynamics
         self.reward = reward

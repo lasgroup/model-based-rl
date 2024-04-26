@@ -11,7 +11,7 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbpo.utils.type_aliases import OptimizerState
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
-from mbrl.model_based_agent.system_wrapper import TransitionCostDynamics, TransitionCostPetsSystem
+from mbrl.model_based_agent.system_wrapper import WtsScPetsDynamics, WtcScPetsSystem
 from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent
 
 
@@ -40,7 +40,7 @@ class WhenToControlModelBasedAgent(BaseModelBasedAgent):
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = TransitionCostDynamics, TransitionCostPetsSystem, PetsActor
+        dynamics, system, actor = WtsScPetsDynamics, WtcScPetsSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
