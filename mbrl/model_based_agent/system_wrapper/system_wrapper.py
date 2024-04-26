@@ -195,14 +195,12 @@ class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
         a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
         z = jnp.concatenate([x, a])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
         if self.predict_difference:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
             delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
             x_next = x + delta_x
         else:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
             x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
 
         # Concatenate state and last num_frame_stack actions
