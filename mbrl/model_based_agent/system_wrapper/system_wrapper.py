@@ -91,7 +91,6 @@ class TransitionCostDynamics(Dynamics, Generic[ModelState]):
                  max_time_between_switches: float = 1.5,
                  dt: float = 0.05,
                  episode_time: float = 5.0,
-                 # TODO: this works ONLY!!! for pendulum, change min and max time passing
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.x_dim = self.x_dim
@@ -414,7 +413,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
         x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
         next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
         x_next = x_next_dist.sample(seed=next_state_key)
-        assert x_next.shape == (self.x_dim + 1,) # We add the integrated reward to x_next
+        assert x_next.shape == (self.x_dim + 1,)  # We add the integrated reward to x_next
         # We split the x_next into next state and integrated reward
         env_state_next, integrated_reward, env_time_next = x_next[:-2], x_next[-2], x_next[-1]
         reward_dist, new_reward_params = self.reward(x, u, system_params.reward_params, x_next)
@@ -424,8 +423,7 @@ class TransitionCostPetsSystem(System, Generic[ModelState, RewardParams]):
                                                    reward_params=new_reward_params,
                                                    key=new_systems_key)
         # We are done if current_time >= Horizon time
-        done = jnp.array(x_next[-1] >= self.dynamics.episode_time).astype(
-            float)  # TODO: this works only for Pendulum, add horizon as a parameter
+        done = jnp.array(x_next[-1] >= self.dynamics.episode_time).astype(float)
         new_system_state = SystemState(
             x_next=jnp.concatenate([env_state_next, env_time_next.reshape(1)]),
             reward=reward,

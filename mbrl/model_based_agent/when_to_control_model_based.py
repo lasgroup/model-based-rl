@@ -43,7 +43,11 @@ class WhenToControlModelBasedAgent(BaseModelBasedAgent):
         dynamics, system, actor = TransitionCostDynamics, TransitionCostPetsSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            min_time_between_switches=self.min_time_between_switches,
+                            max_time_between_switches=self.max_time_between_switches,
+                            episode_time=self.episode_time,
+                            dt=self.dt)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
