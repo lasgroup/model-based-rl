@@ -28,7 +28,17 @@ def experiment(project_name: str = 'GPUSpeedTest',
                sac_horizon: int = 100,
                deterministic_policy_for_data_collection: bool = False,
                seed: int = 42,
+               num_episodes: int = 20,
+               sac_steps: int = 1_000_000,
                ):
+    config = dict(num_offline_samples=num_offline_samples,
+                  sac_horizon=sac_horizon,
+                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  seed=seed,
+                  num_episodes=num_episodes,
+                  sac_steps=sac_steps
+                  )
+
     base_env = PendulumEnv(reward_source='dm-control')
 
     min_time_between_switches = 1 * base_env.dt
@@ -77,17 +87,17 @@ def experiment(project_name: str = 'GPUSpeedTest',
     model = BNNStatisticalModel(
         input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
         output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
-        num_training_steps=30_000,
+        num_training_steps=5000,
         output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
         beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
         features=(64,) * 3,
         bnn_type=DeterministicEnsemble,
         num_particles=5,
-        logging_wandb=log_wandb,
+        logging_wandb=False,
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
-        eval_frequency=5_000,
+        eval_frequency=500,
         weight_decay=0.0,
     )
 
@@ -95,7 +105,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
                                                                 dt=env.dt)
     sac_kwargs = {
-        'num_timesteps': 100_000,
+        'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
         'num_env_steps_between_updates': 10,
         'num_envs': 64,
@@ -148,7 +158,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     if log_wandb:
         wandb.init(project=project_name,
                    dir='/cluster/scratch/' + ENTITY,
-                   )
+                   config=config)
 
     agent = WhenToControlModelBasedAgent(
         env=env,
@@ -168,7 +178,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
     )
 
-    agent_state = agent.run_episodes(num_episodes=20,
+    agent_state = agent.run_episodes(num_episodes=num_episodes,
                                      start_from_scratch=True,
                                      key=key_agent)
 
@@ -180,16 +190,20 @@ def main(args):
                num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
-               seed=args.seed)
+               seed=args.seed,
+               num_episodes=args.num_episodes,
+               sac_steps=args.sac_steps)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
-    parser.add_argument('--num_offline_samples', type=int, default=100)
+    parser.add_argument('--num_offline_samples', type=int, default=200)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--num_episodes', type=int, default=5)
+    parser.add_argument('--sac_steps', type=int, default=100_000)
 
     args = parser.parse_args()
     main(args)
