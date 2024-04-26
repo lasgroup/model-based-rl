@@ -179,6 +179,56 @@ class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
         return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
+class WtsScMeanDynamics(WtsScPetsDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # env_state, env_time = x[:-1], x[-1]
+        # env_action, pseudo_time_for_action = u[:-1], u[-1]
+        env_state, env_time = x[:-1], x[-1]
+        env_action, pseudo_time_for_action = u[:-1], u[-1]
+        # Now we transform pseudo_time_for_action to time for action
+        time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
+                                                   dt=self.dt,
+                                                   t_min=self.min_time_between_switches,
+                                                   t_max=self.max_time_between_switches,
+                                                   env_time=env_time,
+                                                   episode_time=self.episode_time)
+        # Prepare statistical model input
+        sm_input = jnp.concatenate([env_state, env_action, time_for_action[..., None]])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+
+        model_output = self.statistical_model(input=sm_input,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        # dist for [system_state, reward]
+        env_state_next, integrated_reward = model_output.mean[:-1], model_output.mean[-1]
+        if self.predict_difference:
+            env_state_next = env_state + env_state_next
+
+        # what if this becomes negative (shouldn't since we take care for this above), just as safety
+        env_time_next = jnp.clip(env_time + time_for_action, a_min=0).reshape(1)
+        augmented_x_next = jnp.concatenate([env_state_next,
+                                            integrated_reward.reshape(1),
+                                            env_time_next,
+                                            ])
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        # Part of aleatoric uncertainty in time is equal to 0
+        aleatoric_std = jnp.concatenate([model_output.aleatoric_std[:-1],
+                                         model_output.aleatoric_std[-1].reshape(1, ),
+                                         jnp.zeros(shape=(1,)),
+                                         ])
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+
+        return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
+
+
 class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -499,6 +549,11 @@ class WtcScPetsSystem(System, Generic[ModelState, RewardParams]):
 
     def system_params_vmap_axes(self, axes: int = 0):
         return self.vmap_input_axis(data_axis=axes)
+
+
+class WtcScMeanSystem(WtcScPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: WtsScMeanDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
 
 
 class WtcScOptimisticSystem(WtcScPetsSystem, Generic[ModelState, RewardParams]):
