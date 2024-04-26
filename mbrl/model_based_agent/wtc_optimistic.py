@@ -31,21 +31,10 @@ class WtcOptimistic(WtcBaseModelBasedAgent):
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = WtcScOptimisticDynamics, WtcScOptimisticSystem, OptimisticActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
-                            x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size,
-                            min_time_between_switches=self.min_time_between_switches,
-                            max_time_between_switches=self.max_time_between_switches,
-                            episode_time=self.episode_time,
-                            dt=self.dt)
-        system = system(dynamics=dynamics,
-                        reward=self.reward_model, )
-        actor = actor(env_observation_size=self.env.observation_size,
-                      env_action_size=self.env.action_size,
-                      optimizer=optimizer)
-        actor.set_system(system=system)
-        return actor
+        return self.prepare_wtc_actor(optimizer=optimizer,
+                                      dynamics=WtcScOptimisticDynamics,
+                                      system=WtcScOptimisticSystem,
+                                      actor=OptimisticActor)
 
 
 if __name__ == "__main__":
