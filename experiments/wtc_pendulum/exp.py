@@ -50,7 +50,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   bnn_steps=bnn_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
-                  reset_statistical_model=reset_statistical_model
+                  reset_statistical_model=reset_statistical_model,
+                  regression_model=regression_model
                   )
 
     base_env = PendulumEnv(reward_source='dm-control')
