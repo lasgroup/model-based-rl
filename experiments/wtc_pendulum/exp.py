@@ -6,8 +6,9 @@ import jax.random as jr
 import wandb
 from brax.training.replay_buffers import UniformSamplingQueue
 from brax.training.types import Transition
-from bsm.bayesian_regression import DeterministicEnsemble
+from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
 from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
 from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
@@ -33,10 +34,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                bnn_steps: int = 5_000,
                first_episode_for_policy_training: int = -1,
                exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
-               reset_statistical_model: bool = True
+               reset_statistical_model: bool = True,
+               regression_model: str = 'probabilistic_ensemble'
                ):
     assert exploration in ['optimistic', 'pets',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+    assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
@@ -97,22 +101,50 @@ def experiment(project_name: str = 'GPUSpeedTest',
                                                        num_samples=num_offline_samples)
 
     horizon = 100
-    model = BNNStatisticalModel(
-        input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
-        output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
-        num_training_steps=bnn_steps,
-        output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
-        beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
-        features=(64,) * 3,
-        bnn_type=DeterministicEnsemble,
-        num_particles=5,
-        logging_wandb=False,
-        return_best_model=True,
-        eval_batch_size=64,
-        train_share=0.8,
-        eval_frequency=500,
-        weight_decay=0.0,
-    )
+
+    if regression_model == 'probabilistic_ensemble':
+        model = BNNStatisticalModel(
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
+            num_training_steps=bnn_steps,
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
+            beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
+            features=(256,) * 2,
+            bnn_type=ProbabilisticEnsemble,
+            num_particles=10,
+            logging_wandb=False,
+            return_best_model=True,
+            eval_batch_size=64,
+            train_share=0.8,
+            eval_frequency=500,
+            weight_decay=0.0,
+        )
+    elif regression_model == 'FSVGD':
+        model = BNNStatisticalModel(
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
+            num_training_steps=bnn_steps,
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
+            beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
+            features=(256,) * 2,
+            bnn_type=ProbabilisticFSVGDEnsemble,
+            num_particles=5,
+            logging_wandb=False,
+            return_best_model=True,
+            eval_batch_size=64,
+            train_share=0.8,
+            eval_frequency=500,
+            weight_decay=0.0,
+        )
+    elif regression_model == 'GP':
+        model = GPStatisticalModel(
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
+            f_norm_bound=1.0,
+            delta=0.1,
+            num_training_steps=1000,
+        )
 
     discount_factor = 0.99
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
@@ -222,6 +254,7 @@ def main(args):
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
+               regression_model=args.regression_model
                )
 
 
@@ -238,6 +271,7 @@ if __name__ == '__main__':
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='mean')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
+    parser.add_argument('--regression_model', type=str, default='FSVGD')
 
     args = parser.parse_args()
     main(args)

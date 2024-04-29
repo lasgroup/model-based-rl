@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['MBWTC_Apr26_15_00'],
+    'project_name': ['MBWTC_Apr29_13_30'],
     'num_offline_samples': [0, ],
     'sac_horizon': [64, ],
     'deterministic_policy_for_data_collection': [0, ],
@@ -12,7 +12,8 @@ general_configs = {
     'bnn_steps': [5_000, 10_000, 30_000],
     'first_episode_for_policy_training': [2, ],
     'exploration': ['optimistic', 'pets', 'mean'],
-    'reset_statistical_model': [0, 1]
+    'reset_statistical_model': [0, 1],
+    'regression_model': ['probabilistic_ensemble', 'FSVGD', 'GP'],
 }
 
 
