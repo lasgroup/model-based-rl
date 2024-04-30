@@ -18,7 +18,7 @@ from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
 
 log_wandb = True
-ENTITY = 'trevenl'
+ENTITY = 'sukhijab'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -52,15 +52,11 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   )
 
     env = PendulumEnv(reward_source='dm-control')
-    num_integrator_steps = 100
-
-    running_reward_max_bound = 20.0
-    running_reward_min_bound = -5
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
     offline_data = None
-    horizon = 100
+    horizon = 200
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -86,7 +82,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=2.0 * jnp.ones(shape=(env.observation_size,)),
-            features=(256,) * 2,
+            features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
             logging_wandb=False,
@@ -111,7 +107,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 10,
+        'num_env_steps_between_updates': 20,
         'num_envs': 64,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
@@ -122,21 +118,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 64,
+        'batch_size': 32,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
-        'min_replay_size': 10 ** 3,
+        'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 10 * 64,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
         'deterministic_eval': True,
         'init_log_alpha': 0.,
         'policy_hidden_layer_sizes': (32,) * 5,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 3,
+        'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
-        'wandb_logging': log_wandb,
+        'wandb_logging': True,
         'return_best_model': True,
     }
 

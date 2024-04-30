@@ -5,9 +5,10 @@ PROJECT_NAME = 'Model_based_pets_March13_10_20'
 
 general_configs = {
     'project_name': [PROJECT_NAME],
-    'num_offline_samples': [0, 100, 200, 1000],
-    'sac_horizon': [32, 64, 128, ],
-    'deterministic_policy_for_data_collection': [0, 1],
+    'num_offline_samples': [0, 10_000],
+    'sac_horizon': [100],
+    'deterministic_policy_for_data_collection': [1],
+    'seed': list(range(5)),
 }
 
 

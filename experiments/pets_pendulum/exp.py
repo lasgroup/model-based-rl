@@ -16,13 +16,14 @@ from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent.pets_model_based_agent import PETSModelBasedAgent
 from mbrl.utils.offline_data import PendulumOfflineData
 
-ENTITY = 'trevenl'
+ENTITY = 'sukhijab'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
                num_offline_samples: int = 100,
                sac_horizon: int = 100,
-               deterministic_policy_for_data_collection: bool = False
+               deterministic_policy_for_data_collection: bool = False,
+               seed: int = 0,
                ):
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -57,10 +58,11 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return {'dt': env.dt}
 
     offline_data_gen = PendulumOfflineData()
-    key = jr.PRNGKey(0)
+    key = jr.PRNGKey(seed)
+    key, offline_data_key = jr.split(key, 2)
 
     if num_offline_samples > 0:
-        offline_data = offline_data_gen.sample_transitions(key=key,
+        offline_data = offline_data_gen.sample_transitions(key=offline_data_key,
                                                            num_samples=num_offline_samples)
     else:
         offline_data = None
@@ -148,7 +150,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent_state = agent.run_episodes(num_episodes=20,
                                      start_from_scratch=True,
-                                     key=jr.PRNGKey(0))
+                                     key=key)
 
     wandb.finish()
 
@@ -157,7 +159,8 @@ def main(args):
     experiment(project_name=args.project_name,
                num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
-               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection))
+               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               seed=args.seed)
 
 
 if __name__ == '__main__':
@@ -166,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_offline_samples', type=int, default=100)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=0)
 
     args = parser.parse_args()
     main(args)
