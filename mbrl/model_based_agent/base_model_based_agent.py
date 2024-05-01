@@ -228,7 +228,7 @@ class BaseModelBasedAgent(ABC):
         metrics = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
         if self.log_to_wandb:
-            wandb.log(metrics)
+            wandb.log(metrics | {'episode_idx': episode_idx})
         else:
             print(metrics)
         print(f'End with evaluation of the policy')
