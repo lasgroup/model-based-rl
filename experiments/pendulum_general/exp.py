@@ -18,7 +18,7 @@ from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
 
 log_wandb = True
-ENTITY = 'sukhijab'
+ENTITY = 'trevenl'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
