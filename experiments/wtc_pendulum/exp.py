@@ -35,11 +35,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
                first_episode_for_policy_training: int = -1,
                exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
-               regression_model: str = 'probabilistic_ensemble'
+               regression_model: str = 'probabilistic_ensemble',
+               include_aleatoric_std_for_calibration: bool = True,
+               train_share: float = 0.8
                ):
     assert exploration in ['optimistic', 'pets',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    assert 0.0 <= train_share <= 1.0, 'Training share should be between 0.0 and 1.0'
 
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -51,18 +54,22 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
-                  regression_model=regression_model
+                  regression_model=regression_model,
+                  include_aleatoric_std_for_calibration=include_aleatoric_std_for_calibration,
+                  train_share=train_share
                   )
 
     base_env = PendulumEnv(reward_source='dm-control')
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = 30 * base_env.dt
-    num_integrator_steps = 100
+    num_integrator_steps = 200
     switch_cost = 0.1
 
     running_reward_max_bound = 20.0
     running_reward_min_bound = -5
+
+    horizon = 200
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=num_integrator_steps,
@@ -101,8 +108,6 @@ def experiment(project_name: str = 'GPUSpeedTest',
     offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                        num_samples=num_offline_samples)
 
-    horizon = 100
-
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
@@ -110,15 +115,16 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
             beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
-            features=(256,) * 2,
+            features=(64, 64, 64),
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=False,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=train_share,
             eval_frequency=500,
             weight_decay=0.0,
+            include_aleatoric_std_for_calibration=include_aleatoric_std_for_calibration
         )
     elif regression_model == 'FSVGD':
         model = BNNStatisticalModel(
@@ -127,15 +133,16 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
             beta=2.0 * jnp.ones(shape=(env.observation_size + 1 - 1,)),
-            features=(256,) * 2,
+            features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
             logging_wandb=False,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=train_share,
             eval_frequency=500,
             weight_decay=0.0,
+            include_aleatoric_std_for_calibration=include_aleatoric_std_for_calibration
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
@@ -153,7 +160,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 10,
+        'num_env_steps_between_updates': 20,
         'num_envs': 64,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
@@ -164,21 +171,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 64,
+        'batch_size': 32,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
-        'min_replay_size': 10 ** 3,
+        'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 10 * 64,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': 20 * 64,  # should be num_envs * num_env_steps_between_updates
         'deterministic_eval': True,
         'init_log_alpha': 0.,
         'policy_hidden_layer_sizes': (32,) * 5,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 3,
+        'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
-        'wandb_logging': log_wandb,
+        'wandb_logging': True,
         'return_best_model': True,
         'non_equidistant_time': True,
         'continuous_discounting': continuous_discounting,
@@ -255,7 +262,9 @@ def main(args):
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
-               regression_model=args.regression_model
+               regression_model=args.regression_model,
+               include_aleatoric_std_for_calibration=bool(args.include_aleatoric_std_for_calibration),
+               train_share=args.train_share
                )
 
 
@@ -273,6 +282,8 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='mean')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
+    parser.add_argument('--include_aleatoric_std_for_calibration', type=int, default=1)
+    parser.add_argument('--train_share', type=float, default=0.8)
 
     args = parser.parse_args()
     main(args)

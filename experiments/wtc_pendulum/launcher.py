@@ -2,18 +2,20 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['MBWTC_Apr29_13_30'],
+    'project_name': ['MBWTC_May01_17_50'],
     'num_offline_samples': [0, ],
-    'sac_horizon': [64, ],
-    'deterministic_policy_for_data_collection': [0, ],
+    'sac_horizon': [100, ],
+    'deterministic_policy_for_data_collection': [1, ],
     'seed': list(range(5)),
-    'num_episodes': [40, ],
-    'sac_steps': [100_000, 1_000_000, ],
-    'bnn_steps': [5_000, 10_000, 30_000],
-    'first_episode_for_policy_training': [2, ],
-    'exploration': ['optimistic', 'pets', 'mean'],
+    'num_episodes': [20, ],
+    'sac_steps': [1_000_000, ],
+    'bnn_steps': [50_000],
+    'first_episode_for_policy_training': [0, ],
+    'exploration': ['optimistic', ],
     'reset_statistical_model': [0, 1],
-    'regression_model': ['probabilistic_ensemble', 'FSVGD', 'GP'],
+    'regression_model': ['probabilistic_ensemble', 'FSVGD',],
+    'include_aleatoric_std_for_calibration': [0, 1],
+    'train_share': [0.8, 1.0]
 }
 
 

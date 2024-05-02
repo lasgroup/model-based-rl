@@ -1,6 +1,8 @@
 import argparse
+from functools import partial
 
 import chex
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import wandb
@@ -13,7 +15,6 @@ from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
 from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
 
@@ -32,11 +33,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                first_episode_for_policy_training: int = -1,
                exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
-               regression_model: str = 'probabilistic_ensemble'
+               regression_model: str = 'probabilistic_ensemble',
+               env_name: str = 'Pendulum'
                ):
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    assert env_name in ['Pendulum', 'RCCar', 'Greenhouse', 'Reacher']
 
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -48,15 +51,122 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
-                  regression_model=regression_model
+                  regression_model=regression_model,
+                  env_name=env_name
                   )
 
-    env = PendulumEnv(reward_source='dm-control')
+    if env_name == 'Pendulum':
+        env = PendulumEnv(reward_source='dm-control')
+
+        class PendulumReward(Reward):
+            def __init__(self):
+                super().__init__(x_dim=2, u_dim=1)
+
+            def __call__(self,
+                         x: chex.Array,
+                         u: chex.Array,
+                         reward_params: RewardParams,
+                         x_next: chex.Array | None = None
+                         ):
+                assert x.shape == (3,) and u.shape == (1,)
+                theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
+                target_angle = env.reward_params.target_angle
+                diff_th = theta - target_angle
+                diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
+                reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
+                                                       0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
+                reward = reward.squeeze()
+                reward_dist = Normal(reward, jnp.zeros_like(reward))
+                return reward_dist, reward_params
+
+            def init_params(self, key: chex.PRNGKey) -> RewardParams:
+                return {'dt': env.dt}
+
+        reward_model = PendulumReward()
+        horizon = 200
+
+    elif env_name == 'RCCar':
+        from wtc.envs.rccar import RCCar, RCCarEnvReward
+        env = RCCar(margin_factor=20, dt=0.01)
+        horizon = 200
+
+        class RCCarReward(Reward):
+            def __init__(self):
+                super().__init__(x_dim=7, u_dim=2)
+                self.reward_model = RCCarEnvReward(goal=jnp.array([0.0, 0.0, 0.0]),
+                                                   ctrl_cost_weight=0.005,
+                                                   encode_angle=True,
+                                                   margin_factor=20)
+
+            def __call__(self,
+                         x: chex.Array,
+                         u: chex.Array,
+                         reward_params: RewardParams,
+                         x_next: chex.Array | None = None
+                         ):
+                reward = self.reward_model.forward(obs=x,
+                                                   action=u,
+                                                   next_obs=x_next)
+                reward_dist = Normal(reward, jnp.zeros_like(reward))
+                return reward_dist, reward_params
+
+            def init_params(self, key: chex.PRNGKey) -> RewardParams:
+                return {}
+
+        reward_model = RCCarReward()
+
+    elif env_name == 'Greenhouse':
+        from wtc.envs.greenhouse import GreenHouseEnv
+        horizon = 200
+
+        env = GreenHouseEnv()
+
+        class GreenHouseReward(Reward):
+            def __init__(self):
+                super().__init__(x_dim=7, u_dim=2)
+
+            def __call__(self,
+                         x: chex.Array,
+                         u: chex.Array,
+                         reward_params: RewardParams,
+                         x_next: chex.Array | None = None
+                         ):
+                reward = env.reward(x, u, )
+                reward_dist = Normal(reward, jnp.zeros_like(reward))
+                return reward_dist, reward_params
+
+            def init_params(self, key: chex.PRNGKey) -> RewardParams:
+                return {}
+
+        reward_model = GreenHouseReward()
+
+    elif env_name == 'Reacher':
+        from wtc.envs.reacher_dm_control import ReacherDMControl
+        env = ReacherDMControl(backend='generalized')
+        horizon = 200
+
+        class ReacherReward(Reward):
+            def __init__(self):
+                super().__init__(x_dim=7, u_dim=2)
+
+            def __call__(self,
+                         x: chex.Array,
+                         u: chex.Array,
+                         reward_params: RewardParams,
+                         x_next: chex.Array | None = None
+                         ):
+                reward = env.reward(x, u)
+                reward_dist = Normal(reward, jnp.zeros_like(reward))
+                return reward_dist, reward_params
+
+            def init_params(self, key: chex.PRNGKey) -> RewardParams:
+                return {}
+
+        reward_model = ReacherReward()
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
     offline_data = None
-    horizon = 200
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -162,37 +272,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
     elif exploration == 'pets':
         agent_class = PETSModelBasedAgent
 
-    class PendulumReward(Reward):
-        def __init__(self):
-            super().__init__(x_dim=2, u_dim=1)
-
-        def __call__(self,
-                     x: chex.Array,
-                     u: chex.Array,
-                     reward_params: RewardParams,
-                     x_next: chex.Array | None = None
-                     ):
-            assert x.shape == (3,) and u.shape == (1,)
-            theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
-            target_angle = env.reward_params.target_angle
-            diff_th = theta - target_angle
-            diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-            reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                   0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
-            reward = reward.squeeze()
-            reward_dist = Normal(reward, jnp.zeros_like(reward))
-            return reward_dist, reward_params
-
-        def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': env.dt}
-
     agent = agent_class(
         env=env,
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
         episode_length=horizon,
-        reward_model=PendulumReward(),
+        reward_model=reward_model,
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
@@ -221,7 +307,8 @@ def main(args):
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
-               regression_model=args.regression_model
+               regression_model=args.regression_model,
+               env_name=args.env_name
                )
 
 
@@ -235,10 +322,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
+    parser.add_argument('--env_name', type=str, default='RCCar')
 
     args = parser.parse_args()
     main(args)
