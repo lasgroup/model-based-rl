@@ -11,11 +11,11 @@ general_configs = {
     'sac_steps': [1_000_000, ],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0, ],
-    'exploration': ['optimistic', ],
+    'exploration': ['pets', 'mean'],
     'reset_statistical_model': [1],
     'regression_model': ['FSVGD', ],
-    'max_time_factor': [5, 10, 20, 30],
-    'beta_factor': [0, 0.5, 1.0, 2.0],
+    'max_time_factor': [5, ],
+    'beta_factor': [1.0, 2.0],
 }
 
 
