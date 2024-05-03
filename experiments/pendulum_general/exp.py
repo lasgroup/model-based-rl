@@ -104,6 +104,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     discount_factor = 0.99
 
+    num_envs = 64
+    num_env_steps_between_updates = 20
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
@@ -125,7 +127,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': num_envs * num_env_steps_between_updates // 2,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
         'policy_hidden_layer_sizes': (32,) * 5,
