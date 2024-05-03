@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['General_May01_10_50'],
+    'project_name': ['General_May03_10_20'],
     'num_offline_samples': [0],
     'sac_horizon': [100],
     'deterministic_policy_for_data_collection': [1],
@@ -17,7 +17,7 @@ general_configs = {
     # 'env_name': ['Pendulum', 'RCCar', 'Greenhouse', 'Reacher']
 }
 general_configs_reacher = {'env_name': ['Reacher'], 'num_episodes': [50]} | general_configs
-general_configs_rccar = {'RCCar': ['Reacher'], 'num_episodes': [50]} | general_configs
+general_configs_rccar = {'env_name': ['RCCar'], 'num_episodes': [50]} | general_configs
 general_configs_pendulum = {'env_name': ['Pendulum'], 'num_episodes': [20]} | general_configs
 general_configs_greenhouse = {'env_name': ['Greenhouse'], 'num_episodes': [20]} | general_configs
 
@@ -38,7 +38,7 @@ def main():
                           mode='euler',
                           duration='23:59:00',
                           prompt=True,
-                          mem=16000)
+                          mem=32000)
 
 
 if __name__ == '__main__':
