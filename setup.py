@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 required = [
     'pandas',
-    'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git@5bae48edbc11356931fbd273d294d6f8a4c5adf6',
+    'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git',
     'bsm @ git+https://github.com/lasgroup/bayesian_statistical_models.git',
     'wtc @ git+ssh://git@github.com/lenarttreven/when_to_control.git',
     'ray',
