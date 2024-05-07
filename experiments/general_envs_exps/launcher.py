@@ -2,9 +2,9 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['General_May03_10_20'],
+    'project_name': ['RCCar_May06_09_05'],
     'num_offline_samples': [0],
-    'sac_horizon': [100],
+    'sac_horizon': [64, 100],
     'deterministic_policy_for_data_collection': [1],
     'seed': list(range(5)),
     # 'num_episodes': [20],
@@ -16,13 +16,15 @@ general_configs = {
     'regression_model': ['FSVGD'],
     # 'env_name': ['Pendulum', 'RCCar', 'Greenhouse', 'Reacher']
 }
-general_configs_reacher = {'env_name': ['Reacher'], 'num_episodes': [50]} | general_configs
+# general_configs_reacher = {'env_name': ['Reacher'], 'num_episodes': [50]} | general_configs
 general_configs_rccar = {'env_name': ['RCCar'], 'num_episodes': [50]} | general_configs
-general_configs_pendulum = {'env_name': ['Pendulum'], 'num_episodes': [20]} | general_configs
-general_configs_greenhouse = {'env_name': ['Greenhouse'], 'num_episodes': [20]} | general_configs
+# general_configs_pendulum = {'env_name': ['Pendulum'], 'num_episodes': [20]} | general_configs
+# general_configs_greenhouse = {'env_name': ['Greenhouse'], 'num_episodes': [20]} | general_configs
 
-flags_combinations = dict_permutations(general_configs_reacher) + dict_permutations(general_configs_rccar) \
-                     + dict_permutations(general_configs_pendulum) + dict_permutations(general_configs_greenhouse)
+# flags_combinations = dict_permutations(general_configs_reacher) + dict_permutations(general_configs_rccar) \
+#                      + dict_permutations(general_configs_pendulum) + dict_permutations(general_configs_greenhouse)
+
+flags_combinations = dict_permutations(general_configs_rccar)
 
 
 def main():

@@ -1,8 +1,6 @@
 import argparse
-from functools import partial
 
 import chex
-import jax
 import jax.numpy as jnp
 import jax.random as jr
 import wandb
@@ -15,8 +13,11 @@ from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
+from wtc.envs.rccar import RCCar
+from wtc.utils import discrete_to_continuous_discounting
+from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
+
+from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
 
 log_wandb = True
 ENTITY = 'trevenl'
@@ -34,12 +35,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
-               env_name: str = 'Pendulum'
+               max_time_factor: int = 30,
+               beta_factor: float = 2.0,
+               horizon: int = 100,
                ):
-    assert exploration in ['optimistic',
-                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+    assert exploration in ['optimistic', 'pets',
+                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
-    assert env_name in ['Pendulum', 'RCCar', 'Greenhouse', 'Reacher']
 
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -52,174 +54,107 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
-                  env_name=env_name
+                  max_time_factor=max_time_factor,
+                  beta_factor=beta_factor,
+                  horizon=horizon
                   )
 
-    if env_name == 'Pendulum':
-        env = PendulumEnv(reward_source='dm-control')
+    base_env = RCCar(margin_factor=20, dt=0.04)
 
-        class PendulumReward(Reward):
-            def __init__(self):
-                super().__init__(x_dim=2, u_dim=1)
+    min_time_between_switches = 1 * base_env.dt
+    max_time_between_switches = max_time_factor * base_env.dt
+    switch_cost = 1.0
 
-            def __call__(self,
-                         x: chex.Array,
-                         u: chex.Array,
-                         reward_params: RewardParams,
-                         x_next: chex.Array | None = None
-                         ):
-                assert x.shape == (3,) and u.shape == (1,)
-                theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
-                target_angle = env.reward_params.target_angle
-                diff_th = theta - target_angle
-                diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-                reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                       0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
-                reward = reward.squeeze()
-                reward_dist = Normal(reward, jnp.zeros_like(reward))
-                return reward_dist, reward_params
+    running_reward_max_bound = 25.0 + 5  # We add some margin
+    running_reward_min_bound = -0.25 - 1  # We add some margin
 
-            def init_params(self, key: chex.PRNGKey) -> RewardParams:
-                return {'dt': env.dt}
+    env = IHSwitchCostWrapper(base_env,
+                              num_integrator_steps=horizon,
+                              min_time_between_switches=min_time_between_switches,
+                              max_time_between_switches=max_time_between_switches,
+                              switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
+                              time_as_part_of_state=True)
 
-        reward_model = PendulumReward()
-        horizon = 200
+    episode_time = base_env.dt * horizon
 
-    elif env_name == 'RCCar':
-        from wtc.envs.rccar import RCCar, RCCarEnvReward
-        env = RCCar(margin_factor=20, dt=0.04)
-        horizon = 100
+    class TransitionReward(Reward):
+        def __init__(self):
+            super().__init__(x_dim=7, u_dim=2)
 
-        class RCCarReward(Reward):
-            def __init__(self):
-                super().__init__(x_dim=7, u_dim=2)
-                self.reward_model = RCCarEnvReward(goal=jnp.array([0.0, 0.0, 0.0]),
-                                                   ctrl_cost_weight=0.005,
-                                                   encode_angle=True,
-                                                   margin_factor=20)
+        def __call__(self,
+                     x: chex.Array,
+                     u: chex.Array,
+                     reward_params: RewardParams,
+                     x_next: chex.Array | None = None
+                     ):
+            reward = jnp.array(-switch_cost)
+            reward_dist = Normal(reward, jnp.zeros_like(reward))
+            return reward_dist, reward_params
 
-            def __call__(self,
-                         x: chex.Array,
-                         u: chex.Array,
-                         reward_params: RewardParams,
-                         x_next: chex.Array | None = None
-                         ):
-                reward = self.reward_model.forward(obs=x,
-                                                   action=u,
-                                                   next_obs=x_next)
-                reward_dist = Normal(reward, jnp.zeros_like(reward))
-                return reward_dist, reward_params
-
-            def init_params(self, key: chex.PRNGKey) -> RewardParams:
-                return {}
-
-        reward_model = RCCarReward()
-
-    elif env_name == 'Greenhouse':
-        from wtc.envs.greenhouse import GreenHouseEnv
-        horizon = 200
-
-        env = GreenHouseEnv()
-
-        class GreenHouseReward(Reward):
-            def __init__(self):
-                super().__init__(x_dim=7, u_dim=2)
-
-            def __call__(self,
-                         x: chex.Array,
-                         u: chex.Array,
-                         reward_params: RewardParams,
-                         x_next: chex.Array | None = None
-                         ):
-                reward = env.reward(x, u, )
-                reward_dist = Normal(reward, jnp.zeros_like(reward))
-                return reward_dist, reward_params
-
-            def init_params(self, key: chex.PRNGKey) -> RewardParams:
-                return {}
-
-        reward_model = GreenHouseReward()
-
-    elif env_name == 'Reacher':
-        from wtc.envs.reacher_dm_control import ReacherDMControl
-        env = ReacherDMControl(backend='generalized')
-        horizon = 200
-
-        class ReacherReward(Reward):
-            def __init__(self):
-                super().__init__(x_dim=7, u_dim=2)
-
-            def __call__(self,
-                         x: chex.Array,
-                         u: chex.Array,
-                         reward_params: RewardParams,
-                         x_next: chex.Array | None = None
-                         ):
-                reward = env.reward(x, u)
-                reward_dist = Normal(reward, jnp.zeros_like(reward))
-                return reward_dist, reward_params
-
-            def init_params(self, key: chex.PRNGKey) -> RewardParams:
-                return {}
-
-        reward_model = ReacherReward()
+        def init_params(self, key: chex.PRNGKey) -> RewardParams:
+            return {'dt': 0.04}
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
-    offline_data = None
+    if num_offline_samples == 0:
+        offline_data = None
+    else:
+        raise NotImplementedError('Offline data not implemented yet.')
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
-            input_dim=env.observation_size + env.action_size,
-            output_dim=env.observation_size,
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
             num_training_steps=bnn_steps,
-            output_stds=1e-3 * jnp.ones(env.observation_size),
-            beta=2.0 * jnp.ones(shape=(env.observation_size,)),
-            features=(256,) * 2,
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
+            beta=beta_factor * jnp.ones(shape=(env.observation_size + 1 - 1,)),
+            features=(64, 64, 64),
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=False,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
             eval_frequency=500,
             weight_decay=0.0,
         )
     elif regression_model == 'FSVGD':
         model = BNNStatisticalModel(
-            input_dim=env.observation_size + env.action_size,
-            output_dim=env.observation_size,
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
             num_training_steps=bnn_steps,
-            output_stds=1e-3 * jnp.ones(env.observation_size),
-            beta=2.0 * jnp.ones(shape=(env.observation_size,)),
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
+            beta=beta_factor * jnp.ones(shape=(env.observation_size + 1 - 1,)),
             features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
-            num_particles=10,
+            num_particles=5,
             logging_wandb=False,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
             eval_frequency=500,
             weight_decay=0.0,
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
-            input_dim=env.observation_size + env.action_size,
-            output_dim=env.observation_size,
-            output_stds=1e-3 * jnp.ones(env.observation_size),
+            input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
+            output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
+            output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
             f_norm_bound=1.0,
             delta=0.1,
             num_training_steps=1000,
         )
 
     discount_factor = 0.99
+    continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
+                                                                dt=env.dt)
 
+    num_envs = 64
+    num_env_steps_between_updates = 20
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 20,
-        'num_envs': 64,
-        'num_eval_envs': 4,
+        'num_env_steps_between_updates': num_env_steps_between_updates,
+        'num_envs': num_envs,
+        'num_eval_envs': num_envs,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
         'lr_q': 3e-4,
@@ -235,18 +170,22 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
         'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': 20 * 64,  # should be num_envs * num_env_steps_between_updates
+        'grad_updates_per_step': num_envs * num_env_steps_between_updates,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_hidden_layer_sizes': (64, 64, 64),
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_hidden_layer_sizes': (64, 64, 64),
         'critic_activation': swish,
         'wandb_logging': True,
         'return_best_model': True,
+        'non_equidistant_time': True,
+        'continuous_discounting': continuous_discounting,
+        'min_time_between_switches': min_time_between_switches,
+        'max_time_between_switches': max_time_between_switches,
+        'env_dt': env.dt,
     }
-
-    max_replay_size_true_data_buffer = 10 ** 4
+    max_replay_size_true_data_buffer = num_episodes * horizon
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
                               action=jnp.zeros(shape=(env.action_size,)),
                               reward=jnp.array(0.0),
@@ -268,24 +207,33 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent_class = None
     if exploration == 'optimistic':
-        agent_class = OptimisticModelBasedAgent
+        agent_class = WtcOptimistic
+    elif exploration == 'mean':
+        agent_class = WtcMean
     elif exploration == 'pets':
-        agent_class = PETSModelBasedAgent
+        agent_class = WtcPets
 
     agent = agent_class(
         env=env,
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
+        reward_model=TransitionReward(),
         episode_length=horizon,
-        reward_model=reward_model,
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
         log_to_wandb=log_wandb,
+        dt=env.dt,
+        min_time_between_switches=min_time_between_switches,
+        max_time_between_switches=max_time_between_switches,
+        episode_time=episode_time,
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+        running_reward_max_bound=running_reward_max_bound,
+        running_reward_min_bound=running_reward_min_bound,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -308,25 +256,29 @@ def main(args):
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
-               env_name=args.env_name
+               max_time_factor=args.max_time_factor,
+               beta_factor=args.beta_factor,
+               horizon=args.horizon,
                )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
-    parser.add_argument('--num_offline_samples', type=int, default=200)
+    parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, default='pets')
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=0)
+    parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--env_name', type=str, default='RCCar')
+    parser.add_argument('--max_time_factor', type=int, default=30)
+    parser.add_argument('--beta_factor', type=float, default=2.0)
+    parser.add_argument('--horizon', type=int, default=100)
 
     args = parser.parse_args()
     main(args)
