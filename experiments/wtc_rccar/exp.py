@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import chex
 import jax.numpy as jnp
@@ -22,6 +23,9 @@ from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
 log_wandb = True
 ENTITY = 'trevenl'
 
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".5"
+
 
 def experiment(project_name: str = 'GPUSpeedTest',
                num_offline_samples: int = 100,
@@ -38,6 +42,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                max_time_factor: int = 30,
                beta_factor: float = 2.0,
                horizon: int = 100,
+               transition_cost: float = 0.1,
                ):
     assert exploration in ['optimistic', 'pets',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -56,14 +61,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   regression_model=regression_model,
                   max_time_factor=max_time_factor,
                   beta_factor=beta_factor,
-                  horizon=horizon
+                  horizon=horizon,
+                  transition_cost=transition_cost
                   )
 
     base_env = RCCar(margin_factor=20, dt=0.04)
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = max_time_factor * base_env.dt
-    switch_cost = 1.0
 
     running_reward_max_bound = 25.0 + 5  # We add some margin
     running_reward_min_bound = -0.25 - 1  # We add some margin
@@ -87,7 +92,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                      reward_params: RewardParams,
                      x_next: chex.Array | None = None
                      ):
-            reward = jnp.array(-switch_cost)
+            reward = jnp.array(-transition_cost)
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
 
@@ -259,6 +264,7 @@ def main(args):
                max_time_factor=args.max_time_factor,
                beta_factor=args.beta_factor,
                horizon=args.horizon,
+               transition_cost=args.transition_cost,
                )
 
 
@@ -279,6 +285,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_time_factor', type=int, default=30)
     parser.add_argument('--beta_factor', type=float, default=2.0)
     parser.add_argument('--horizon', type=int, default=100)
+    parser.add_argument('--transition_cost', type=float, default=0.1)
 
     args = parser.parse_args()
     main(args)
