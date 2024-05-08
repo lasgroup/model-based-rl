@@ -14,7 +14,7 @@ runs = api.runs(f"{entity}/{project}")
 # Create an empty list to hold data
 data = []
 
-logging_data = 'eval_true_env/avg_episode_length'
+logging_data = 'eval_true_env/episode_reward'
 
 # Loop through runs ant collect data
 for idx, run in enumerate(runs):
@@ -48,4 +48,4 @@ df = df.join(config_df).join(summary_df)
 print(df.head())  # Display the first few rows of the DataFrame
 
 # You can now save this DataFrame to a CSV file or perform further analysis
-df.to_csv("data/wtc_model_based_pendulum.csv", index=False)
+df.to_csv("data/wtc_model_based_pendulum_episode_reward.csv", index=False)

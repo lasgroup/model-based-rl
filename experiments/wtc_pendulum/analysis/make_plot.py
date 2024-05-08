@@ -2,16 +2,32 @@ import pandas as pd
 import numpy as np
 from typing import NamedTuple
 import matplotlib.pyplot as plt
-
-data = pd.read_csv('data/wtc_model_based_pendulum.csv')
+import matplotlib as mpl
 
 beta_factor = 1
 max_time_factor = 5
 NUM_SAMPLES = 5
 MODEL_FREE_REWARD = 151.2183380126953
 
-filtered_df = data[(data['max_time_factor'] == max_time_factor) &
-                   (data['beta_factor'] == beta_factor)]
+LEGEND_FONT_SIZE = 22
+TITLE_FONT_SIZE = 30
+TABLE_FONT_SIZE = 20
+LABEL_FONT_SIZE = 26
+TICKS_SIZE = 24
+OBSERVATION_SIZE = 300
+
+NUM_SAMPLES_PER_SEED = 5
+LINE_WIDTH = 5
+
+plt.rc('text', usetex=True)
+plt.rc('text.latex', preamble=
+r'\usepackage{amsmath}'
+r'\usepackage{bm}'
+r'\def\vx{{\bm{x}}}'
+r'\def\vf{{\bm{f}}}')
+
+mpl.rcParams['xtick.labelsize'] = TICKS_SIZE
+mpl.rcParams['ytick.labelsize'] = TICKS_SIZE
 
 
 class Statistics(NamedTuple):
@@ -19,14 +35,46 @@ class Statistics(NamedTuple):
     ys_mean: np.ndarray
     ys_median: np.ndarray
     ys_std: np.ndarray
+    name: str
 
+
+BASELINE_NAMES = {
+    'basline0': 'Optimistic',
+    'basline1': 'Pets',
+    'basline2': 'Mean',
+    'basline3': 'Standard RL',
+}
+
+LINESTYLES = {
+    'basline0': 'solid',
+    'basline1': 'dashed',
+    'basline2': 'dotted',
+    'basline3': 'dashdot',
+}
+
+COLORS = {
+    'basline0': 'C0',
+    'basline1': 'C1',
+    'basline2': 'C2',
+    'basline3': 'C3',
+}
+
+LINESTYLES_FROM_NAMES = {BASELINE_NAMES[name]: style for name, style in LINESTYLES.items()}
+COLORS_FROM_NAMES = {BASELINE_NAMES[name]: color for name, color in COLORS.items()}
+
+################## Number of Measurements ##################
+############################################################
+
+data = pd.read_csv('data/wtc_model_based_pendulum_num_measurement.csv')
+filtered_df = data[(data['max_time_factor'] == max_time_factor) &
+                   (data['beta_factor'] == beta_factor)]
 
 optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
 pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
 mean_data = filtered_df[filtered_df['exploration'] == 'mean']['plot_tuple']
 
 
-def prepare_statistics(data: pd.Series) -> Statistics:
+def prepare_statistics(data: pd.Series, name: str) -> Statistics:
     all_values = []
     for tuple in data:
         tuple = eval(tuple)
@@ -39,34 +87,100 @@ def prepare_statistics(data: pd.Series) -> Statistics:
     return Statistics(xs=np.arange(20),
                       ys_median=np.median(all_values, axis=0),
                       ys_std=np.std(all_values, axis=0),
-                      ys_mean=np.mean(all_values, axis=0))
+                      ys_mean=np.mean(all_values, axis=0),
+                      name=name)
 
 
-optimistic_stats = prepare_statistics(optimistic_data)
-pets_stats = prepare_statistics(pets_data)
-mean_stats = prepare_statistics(mean_data)
+optimistic_stats = prepare_statistics(optimistic_data, 'Optimistic')
+pets_stats = prepare_statistics(pets_data, 'Pets')
+mean_stats = prepare_statistics(mean_data, 'Mean')
+standard_xs = np.arange(20)
+standard_rl_stats = Statistics(xs=standard_xs,
+                               ys_median=standard_xs * 200 + 200,
+                               ys_std=standard_xs * 0,
+                               ys_mean=standard_xs * 200 + 200,
+                               name='Standard RL')
 
-plt.plot(optimistic_stats.xs, optimistic_stats.ys_median, label='Optimistic')
-plt.fill_between(optimistic_stats.xs,
-                 optimistic_stats.ys_median - optimistic_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 optimistic_stats.ys_median + optimistic_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 alpha=0.4, )
+num_measurement_stats = [optimistic_stats, pets_stats, mean_stats, standard_rl_stats]
 
-plt.plot(pets_stats.xs, pets_stats.ys_median, label='Pets')
-plt.fill_between(pets_stats.xs,
-                 pets_stats.ys_median - pets_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 pets_stats.ys_median + pets_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 alpha=0.4, )
+################## Reward ##################################
+############################################################
 
-plt.plot(mean_stats.xs, mean_stats.ys_median, label='Mean')
-plt.fill_between(mean_stats.xs,
-                 mean_stats.ys_median - mean_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 mean_stats.ys_median + mean_stats.ys_std / np.sqrt(NUM_SAMPLES),
-                 alpha=0.4, )
+data = pd.read_csv('data/wtc_model_based_pendulum_episode_reward.csv')
+filtered_df = data[(data['max_time_factor'] == max_time_factor) &
+                   (data['beta_factor'] == beta_factor)]
 
-# plt.axhline(y=MODEL_FREE_REWARD, color='r', linestyle='--', label='Model free final reward')
-plt.xlabel('Episodes')
-plt.ylabel('Number of measurements')
-plt.legend()
-plt.savefig('wtc_pendulum_num_measurements.pdf')
+optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
+pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
+mean_data = filtered_df[filtered_df['exploration'] == 'mean']['plot_tuple']
+
+
+def prepare_statistics(data: pd.Series, name: str) -> Statistics:
+    all_values = []
+    for tuple in data:
+        tuple = eval(tuple)
+        indices, values = tuple
+        all_values.append(np.array(values))
+
+    all_values = np.stack(all_values)
+    return Statistics(xs=np.arange(20),
+                      ys_median=np.median(all_values, axis=0),
+                      ys_std=np.std(all_values, axis=0),
+                      ys_mean=np.mean(all_values, axis=0),
+                      name=name)
+
+
+optimistic_stats = prepare_statistics(optimistic_data, 'Optimistic')
+pets_stats = prepare_statistics(pets_data, 'Pets')
+mean_stats = prepare_statistics(mean_data, 'Mean')
+
+episode_reward_stats = [optimistic_stats, pets_stats, mean_stats]
+
+fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
+
+for stats in episode_reward_stats:
+    axs[0].plot(stats.xs, stats.ys_median, label=stats.name,
+                linewidth=LINE_WIDTH,
+                linestyle=LINESTYLES_FROM_NAMES[stats.name], )
+    axs[0].fill_between(stats.xs,
+                        stats.ys_median - stats.ys_std / np.sqrt(NUM_SAMPLES),
+                        stats.ys_median + stats.ys_std / np.sqrt(NUM_SAMPLES),
+                        alpha=0.4, )
+
+    axs[0].axhline(y=MODEL_FREE_REWARD, color='black', linestyle='-', label='Best Model-Free', linewidth=LINE_WIDTH)
+    axs[0].set_xlabel('Episodes', fontsize=LABEL_FONT_SIZE)
+    axs[0].set_ylabel('Episode Reward', fontsize=LABEL_FONT_SIZE)
+
+for stats in num_measurement_stats:
+    axs[1].plot(stats.xs, stats.ys_median,
+                label=stats.name,
+                linewidth=LINE_WIDTH,
+                linestyle=LINESTYLES_FROM_NAMES[stats.name], )
+    axs[1].fill_between(stats.xs,
+                        stats.ys_median - stats.ys_std / np.sqrt(NUM_SAMPLES),
+                        stats.ys_median + stats.ys_std / np.sqrt(NUM_SAMPLES),
+                        alpha=0.4, )
+
+    # plt.axhline(y=MODEL_FREE_REWARD, color='r', linestyle='--', label='Model free final reward')
+    axs[1].set_xlabel('Episodes', fontsize=LABEL_FONT_SIZE)
+    axs[1].set_ylabel('\# Measurements', fontsize=LABEL_FONT_SIZE)
+
+handles, labels = [], []
+for ax in axs:
+    for handle, label in zip(*ax.get_legend_handles_labels()):
+        handles.append(handle)
+        labels.append(label)
+by_label = dict(zip(labels, handles))
+
+fig.legend(by_label.values(), by_label.keys(),
+           ncols=5,
+           loc='upper center',
+           bbox_to_anchor=(0.5, 0.9),
+           fontsize=LEGEND_FONT_SIZE,
+           frameon=False)
+
+fig.suptitle('Pendulum Swing-Up [Duration=10s]', fontsize=TITLE_FONT_SIZE, y=0.95)
+fig.tight_layout(rect=[0.0, 0.0, 1, 0.9])
+
+plt.savefig('wtc_model_based_pendulum.pdf')
 plt.show()
