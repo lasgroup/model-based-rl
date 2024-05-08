@@ -2,13 +2,13 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['WTC_RTCCar_May08_14_20'],
+    'project_name': ['WTC_RTCCar_May08_17_05'],
     'num_offline_samples': [0, ],
     'sac_horizon': [64, 100,],
     'deterministic_policy_for_data_collection': [1, ],
     'seed': list(range(5)),
     'num_episodes': [50],
-    'sac_steps': [1_000_000, ],
+    'sac_steps': [250_000, ],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0, ],
     'exploration': ['optimistic', 'pets'],
