@@ -24,7 +24,7 @@ log_wandb = True
 ENTITY = 'trevenl'
 
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".5"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".9"
 
 
 def experiment(project_name: str = 'GPUSpeedTest',

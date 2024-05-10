@@ -2,22 +2,22 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['WTC_RTCCar_May08_17_05'],
+    'project_name': ['WTC_RCCar_Debug_May10_09_25'],
     'num_offline_samples': [0, ],
-    'sac_horizon': [64, 100,],
+    'sac_horizon': [64,],
     'deterministic_policy_for_data_collection': [1, ],
     'seed': list(range(5)),
     'num_episodes': [50],
     'sac_steps': [250_000, ],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0, ],
-    'exploration': ['optimistic', 'pets'],
+    'exploration': ['optimistic',],
     'reset_statistical_model': [1],
     'regression_model': ['FSVGD'],
-    'max_time_factor': [5, 10, ],
-    'beta_factor': [1.0, 2.0],
+    'max_time_factor': [5, ],
+    'beta_factor': [2.0],
     'horizon': [100],
-    'transition_cost': [0.01, 0.5]
+    'transition_cost': [0.01,]
 }
 
 

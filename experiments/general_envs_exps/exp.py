@@ -286,6 +286,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -326,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--env_name', type=str, default='RCCar')
+    parser.add_argument('--env_name', type=str, default='Reacher')
 
     args = parser.parse_args()
     main(args)
