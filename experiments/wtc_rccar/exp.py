@@ -24,7 +24,8 @@ log_wandb = True
 ENTITY = 'trevenl'
 
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".9"
+# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".9"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -135,7 +136,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             logging_wandb=False,
             return_best_model=True,
             eval_batch_size=64,
-            eval_frequency=500,
+            eval_frequency=10,
             weight_decay=0.0,
         )
     elif regression_model == 'GP':
@@ -152,8 +153,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
                                                                 dt=env.dt)
 
-    num_envs = 64
-    num_env_steps_between_updates = 20
+    num_envs = 128
+    num_env_steps_between_updates = 5
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
@@ -168,19 +169,19 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 32,
+        'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
-        'reward_scaling': 1.,
+        'reward_scaling': 10.,
         'tau': 0.005,
-        'min_replay_size': 10 ** 4,
-        'max_replay_size': 10 ** 5,
+        'min_replay_size': 10 ** 3,
+        'max_replay_size': sac_steps,
         'grad_updates_per_step': num_envs * num_env_steps_between_updates,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (64, 64, 64),
+        'policy_hidden_layer_sizes': (64, 64,),
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (64, 64, 64),
+        'critic_hidden_layer_sizes': (64, 64,),
         'critic_activation': swish,
         'wandb_logging': True,
         'return_best_model': True,
