@@ -1,8 +1,8 @@
 import exp
-from experiments.util import generate_run_commands, generate_base_command, dict_permutations
+from experiments.util import generate_run_commands, generate_base_command, dict_permutations, available_gpus
 
 general_configs = {
-    'project_name': ['Reacher_May10_09_30'],
+    'project_name': ['Reacher_May10_09_30_a100_80gb'],
     'num_offline_samples': [0],
     'sac_horizon': [64, 100],
     'deterministic_policy_for_data_collection': [1],
@@ -37,6 +37,7 @@ def main():
     generate_run_commands(command_list,
                           num_cpus=1,
                           num_gpus=1,
+                          gpu=available_gpus[8],
                           mode='euler',
                           duration='23:59:00',
                           prompt=True,
