@@ -15,14 +15,14 @@ from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-from wtc.envs.rccar import RCCar
 from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
+from wtc.envs.reacher_dm_control import ReacherDMControl
 
 log_wandb = True
-ENTITY = 'sukhijab'
+ENTITY = 'trevenl'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -69,13 +69,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   transition_cost=transition_cost
                   )
 
-    base_env = RCCar(margin_factor=20, dt=0.04)
+    base_env = ReacherDMControl(backend='generalized')
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = max_time_factor * base_env.dt
 
-    running_reward_max_bound = 25.0 + 5  # We add some margin
-    running_reward_min_bound = -0.25 - 1  # We add some margin
+    running_reward_max_bound = 50.0 + 5  # We add some margin
+    running_reward_min_bound = -2 - 1  # We add some margin
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=horizon,
@@ -101,7 +101,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': 0.04}
+            return {'dt': 0.02}
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -294,10 +294,10 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--max_time_factor', type=int, default=30)
+    parser.add_argument('--max_time_factor', type=int, default=10)
     parser.add_argument('--beta_factor', type=float, default=2.0)
-    parser.add_argument('--horizon', type=int, default=100)
-    parser.add_argument('--transition_cost', type=float, default=0.1)
+    parser.add_argument('--horizon', type=int, default=200)
+    parser.add_argument('--transition_cost', type=float, default=0.5)
 
     args = parser.parse_args()
     main(args)
