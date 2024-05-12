@@ -4,6 +4,7 @@ import os
 import chex
 import jax.numpy as jnp
 import jax.random as jr
+import optax
 import wandb
 from brax.training.replay_buffers import UniformSamplingQueue
 from brax.training.types import Transition
@@ -21,11 +22,7 @@ from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCo
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
 
 log_wandb = True
-ENTITY = 'trevenl'
-
-# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".9"
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+ENTITY = 'sukhijab'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -35,7 +32,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
                seed: int = 42,
                num_episodes: int = 20,
                sac_steps: int = 1_000_000,
-               bnn_steps: int = 5_000,
+               min_bnn_steps: int = 1_000,
+               max_bnn_steps: int = 50_000,
+               linear_scheduler_steps: int = 20_000,
                first_episode_for_policy_training: int = -1,
                exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
@@ -49,13 +48,17 @@ def experiment(project_name: str = 'GPUSpeedTest',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
 
+    num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
+                                                transition_steps=linear_scheduler_steps)
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   seed=seed,
                   num_episodes=num_episodes,
                   sac_steps=sac_steps,
-                  bnn_steps=bnn_steps,
+                  min_bnn_steps=min_bnn_steps,
+                  max_bnn_steps=max_bnn_steps,
+                  linear_scheduler_steps=linear_scheduler_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
@@ -111,33 +114,36 @@ def experiment(project_name: str = 'GPUSpeedTest',
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
             output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
-            num_training_steps=bnn_steps,
+            num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
             beta=beta_factor * jnp.ones(shape=(env.observation_size + 1 - 1,)),
             features=(64, 64, 64),
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
-            eval_batch_size=64,
+            eval_batch_size=256,
             eval_frequency=500,
             weight_decay=0.0,
+            logging_frequency=100,
         )
     elif regression_model == 'FSVGD':
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size - 1,  # -1 since we don't input env_time
             output_dim=env.observation_size + 1 - 1,  # +1 for the reward -1 for env time
-            num_training_steps=bnn_steps,
+            num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size + 1 - 1),  # +1 for the reward -1 for env_time
             beta=beta_factor * jnp.ones(shape=(env.observation_size + 1 - 1,)),
             features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
-            eval_batch_size=64,
+            eval_batch_size=256,
             eval_frequency=10,
             weight_decay=0.0,
+            logging_frequency=100,
+
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
@@ -147,6 +153,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             f_norm_bound=1.0,
             delta=0.1,
             num_training_steps=1000,
+            logging_frequency=100,
         )
 
     discount_factor = 0.99
@@ -183,7 +190,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (64, 64,),
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
         'non_equidistant_time': True,
         'continuous_discounting': continuous_discounting,
@@ -257,7 +264,9 @@ def main(args):
                seed=args.seed,
                num_episodes=args.num_episodes,
                sac_steps=args.sac_steps,
-               bnn_steps=args.bnn_steps,
+               min_bnn_steps=args.min_bnn_steps,
+               max_bnn_steps=args.max_bnn_steps,
+               linear_scheduler_steps=args.linear_scheduler_steps,
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
@@ -278,7 +287,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
-    parser.add_argument('--bnn_steps', type=int, default=5_000)
+    parser.add_argument('--min_bnn_steps', type=int, default=5_000)
+    parser.add_argument('--max_bnn_steps', type=int, default=50_000)
+    parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=0)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)

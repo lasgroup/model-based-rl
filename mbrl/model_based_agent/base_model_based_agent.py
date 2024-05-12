@@ -221,8 +221,6 @@ class BaseModelBasedAgent(ABC):
                 agent_state = self.train_policy(agent_state=agent_state,
                                                 episode_idx=episode_idx)
                 print(f'End of policy training')
-            if episode_idx % 5 == 0:
-                gc.collect()
         # We collect new data with the current policy
         print(f'Start of data collection')
         agent_state = self.simulate_on_true_env(agent_state=agent_state)
