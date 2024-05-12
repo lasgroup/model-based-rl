@@ -285,7 +285,7 @@ if __name__ == '__main__':
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=5)
+    parser.add_argument('--num_episodes', type=int, default=50)
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--min_bnn_steps', type=int, default=5_000)
     parser.add_argument('--max_bnn_steps', type=int, default=50_000)

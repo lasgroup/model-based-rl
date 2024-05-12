@@ -9,7 +9,7 @@ general_configs = {
     'seed': list(range(5)),
     'num_episodes': [50],
     'sac_steps': [500_000],
-    'min_bnn_steps': [1_000, 5_000],
+    'min_bnn_steps': [5_000],
     'max_bnn_steps': [50_000],
     'linear_scheduler_steps': [20_000],
     'first_episode_for_policy_training': [0, 2],
