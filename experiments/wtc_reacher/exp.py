@@ -246,7 +246,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
         running_reward_min_bound=running_reward_min_bound,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
-        max_collected_data_in_buffer=max_replay_size_true_data_buffer
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer,
+        save_trajectory_transitions=True
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
