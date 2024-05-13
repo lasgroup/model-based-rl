@@ -36,7 +36,7 @@ def experiment(env_name: str = 'inverted_pendulum',
     if plot:
         fig, axs = plt.subplots(ncols=1, nrows=1)
         # Plot trajectory:
-        rewards = vmap(tolerance_reward)(jnp.sqrt(jnp.sum(trajectory.observation[:, -3:] ** 2, axis=-1)))
+        rewards = tolerance_reward(jnp.sqrt(jnp.sum(trajectory.observation[:, -4:-1] ** 2, axis=-1)))
         axs.plot(rewards)
         axs.set_ylabel('State')
         axs.set_xlabel('Steps')
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     environments = ['reacher']
     tracks = [False]
     for env, track in zip(environments[:1], tracks[:1]):
-        for index in range(13, 14):
+        for index in range(2, 3):
             experiment(env_name=env,
                        backend='generalized',
                        filename=f'episode_{index}_trajectory.pkl',

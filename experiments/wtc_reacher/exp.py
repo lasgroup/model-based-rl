@@ -88,7 +88,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     class TransitionReward(Reward):
         def __init__(self):
-            super().__init__(x_dim=7, u_dim=2)
+            super().__init__(x_dim=11, u_dim=2)
 
         def __call__(self,
                      x: chex.Array,
@@ -156,7 +156,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             logging_frequency=100,
         )
 
-    discount_factor = 0.99
+    discount_factor = 0.95
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
                                                                 dt=env.dt)
 
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
     parser.add_argument('--num_offline_samples', type=int, default=0)
-    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--sac_horizon', type=int, default=32)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=50)
@@ -297,7 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='FSVGD')
     parser.add_argument('--max_time_factor', type=int, default=10)
     parser.add_argument('--beta_factor', type=float, default=2.0)
-    parser.add_argument('--horizon', type=int, default=200)
+    parser.add_argument('--horizon', type=int, default=50)
     parser.add_argument('--transition_cost', type=float, default=0.5)
 
     args = parser.parse_args()
