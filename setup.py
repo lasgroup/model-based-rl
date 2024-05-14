@@ -9,7 +9,7 @@ required = [
     'chex>=0.1.82',
     'flax==0.7.2',
     'jax==0.4.14',
-    'jaxlib==0.4.14+cuda12.cudnn89 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html',
+    'jaxlib==0.4.14',  # Note: User must manually install using provided pip command for CUDA/CUDNN support
     'jaxopt==0.8',
     'jaxtyping==0.2.21',
     'jaxutils==0.0.8',
