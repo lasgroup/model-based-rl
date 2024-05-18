@@ -1,5 +1,4 @@
 import argparse
-import os
 
 import chex
 import jax.numpy as jnp
@@ -15,11 +14,11 @@ from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+from wtc.envs.greenhouse import GreenHouseEnv
 from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
-from wtc.envs.reacher_dm_control import ReacherDMControl
 
 log_wandb = True
 ENTITY = 'trevenl'
@@ -69,13 +68,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   transition_cost=transition_cost
                   )
 
-    base_env = ReacherDMControl(backend='generalized')
+    base_env = GreenHouseEnv(add_process_noise=False)
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = max_time_factor * base_env.dt
 
-    running_reward_max_bound = 50.0 + 5  # We add some margin
-    running_reward_min_bound = -2 - 1  # We add some margin
+    running_reward_max_bound = (1 + 0.2) / base_env.dt  # We add some margin
+    running_reward_min_bound = 0.0  # We add some margin
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=horizon,
@@ -88,7 +87,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     class TransitionReward(Reward):
         def __init__(self):
-            super().__init__(x_dim=11, u_dim=2)
+            super().__init__(x_dim=16, u_dim=4)
 
         def __call__(self,
                      x: chex.Array,
@@ -101,7 +100,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': 0.02}
+            return {'dt': 300}
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -156,7 +155,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             logging_frequency=100,
         )
 
-    discount_factor = 0.95
+    discount_factor = 0.997
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
                                                                 dt=env.dt)
 

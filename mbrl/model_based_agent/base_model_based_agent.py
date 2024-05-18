@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import partial
+from typing import Tuple
+import os
+import pickle
 
 import chex
 import jax.numpy as jnp
@@ -15,7 +18,6 @@ from jax import jit
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.utils.type_aliases import OptimizerState
-import gc
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor
 from mbrl.utils.brax_utils import EnvInteractor
@@ -49,6 +51,7 @@ class BaseModelBasedAgent(ABC):
                  log_to_wandb: bool = False,
                  deterministic_policy_for_data_collection: bool = False,
                  first_episode_for_policy_training: int = -1,
+                 save_trajectory_transitions: bool = False,
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -67,6 +70,7 @@ class BaseModelBasedAgent(ABC):
         self.log_to_wandb = log_to_wandb
         self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
         self.first_episode_for_policy_training = first_episode_for_policy_training
+        self.save_trajectory_transitions = save_trajectory_transitions
 
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(
@@ -188,7 +192,7 @@ class BaseModelBasedAgent(ABC):
     @partial(jit, static_argnums=0)
     def simulate_on_true_env(self,
                              agent_state: ModelBasedAgentState,
-                             ) -> ModelBasedAgentState:
+                             ) -> Tuple[ModelBasedAgentState, Transition]:
         key_agent, key_reset = jr.split(agent_state.key)
         env_state = self.env_interactor.reset(key=key_reset)
         optimizer_state = agent_state.optimizer_state
@@ -202,9 +206,7 @@ class BaseModelBasedAgent(ABC):
                                                                         samples=transitions)
         optimizer_state = optimizer_state.replace(true_buffer_state=collected_data_buffer_state)
         env_steps = agent_state.env_steps + self.num_envs * self.episode_length
-        return ModelBasedAgentState(optimizer_state=optimizer_state,
-                                    env_steps=env_steps,
-                                    key=key_agent, )
+        return ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent), transitions
 
     def do_episode(self,
                    agent_state: ModelBasedAgentState,
@@ -223,7 +225,15 @@ class BaseModelBasedAgent(ABC):
                 print(f'End of policy training')
         # We collect new data with the current policy
         print(f'Start of data collection')
-        agent_state = self.simulate_on_true_env(agent_state=agent_state)
+        agent_state, trajectory_transitions = self.simulate_on_true_env(agent_state=agent_state)
+        if self.save_trajectory_transitions and self.log_to_wandb:
+            directory = os.path.join(wandb.run.dir, 'results')
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            model_path = os.path.join(directory, f'episode_{episode_idx}_trajectory.pkl')
+            with open(model_path, 'wb') as handle:
+                pickle.dump(trajectory_transitions, handle)
+            wandb.save(model_path, wandb.run.dir)
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
         metrics = self.env_interactor.run_evaluation(actor=self.actor,

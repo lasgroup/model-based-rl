@@ -2,9 +2,9 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['WTC_Reacher_May13_11_15'],
+    'project_name': ['WTC_Greenhouse_May13_16_35'],
     'num_offline_samples': [0],
-    'sac_horizon': [32],
+    'sac_horizon': [64],
     'deterministic_policy_for_data_collection': [0, 1],
     'seed': list(range(5)),
     'num_episodes': [50],
@@ -12,14 +12,14 @@ general_configs = {
     'min_bnn_steps': [5_000],
     'max_bnn_steps': [50_000],
     'linear_scheduler_steps': [20_000],
-    'first_episode_for_policy_training': [0, 5],
+    'first_episode_for_policy_training': [0,],
     'exploration': ['optimistic', 'pets'],
     'reset_statistical_model': [1],
     'regression_model': ['FSVGD'],
     'max_time_factor': [5, ],
     'beta_factor': [2.0],
-    'horizon': [50],
-    'transition_cost': [0.1]
+    'horizon': [200],
+    'transition_cost': [0.1, 1.0]
 }
 
 

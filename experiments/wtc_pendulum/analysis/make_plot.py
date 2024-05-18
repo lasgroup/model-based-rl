@@ -4,8 +4,11 @@ from typing import NamedTuple
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-beta_factor = 1
+beta_factor = 2
 max_time_factor = 5
+transition_cost = 1
+deterministic_policy_for_data_collection = True
+first_episode_for_policy_training = 0
 NUM_SAMPLES = 5
 MODEL_FREE_REWARD = 151.2183380126953
 
@@ -67,7 +70,10 @@ COLORS_FROM_NAMES = {BASELINE_NAMES[name]: color for name, color in COLORS.items
 
 data = pd.read_csv('data/wtc_model_based_pendulum_num_measurement.csv')
 filtered_df = data[(data['max_time_factor'] == max_time_factor) &
-                   (data['beta_factor'] == beta_factor)]
+                   (data['beta_factor'] == beta_factor) &
+                   (data['transition_cost'] == transition_cost) &
+                   (data['deterministic_policy_for_data_collection'] == deterministic_policy_for_data_collection) &
+                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training)]
 
 optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
 pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
@@ -107,8 +113,12 @@ num_measurement_stats = [optimistic_stats, pets_stats, mean_stats, standard_rl_s
 ############################################################
 
 data = pd.read_csv('data/wtc_model_based_pendulum_episode_reward.csv')
+
 filtered_df = data[(data['max_time_factor'] == max_time_factor) &
-                   (data['beta_factor'] == beta_factor)]
+                   (data['beta_factor'] == beta_factor) &
+                   (data['transition_cost'] == transition_cost) &
+                   (data['deterministic_policy_for_data_collection'] == deterministic_policy_for_data_collection) &
+                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training)]
 
 optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
 pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
