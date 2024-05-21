@@ -19,6 +19,7 @@ TABLE_FONT_SIZE = 20
 LABEL_FONT_SIZE = 26
 TICKS_SIZE = 24
 OBSERVATION_SIZE = 300
+sac_steps = 500_000
 
 NUM_SAMPLES_PER_SEED = 5
 LINE_WIDTH = 5
@@ -74,7 +75,8 @@ filtered_df = data[(data['max_time_factor'] == max_time_factor) &
                    (data['beta_factor'] == beta_factor) &
                    (data['transition_cost'] == transition_cost) &
                    (data['deterministic_policy_for_data_collection'] == deterministic_policy_for_data_collection) &
-                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training)]
+                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training) &
+                   (data['sac_steps'] == sac_steps)]
 
 optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
 pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
@@ -119,7 +121,8 @@ filtered_df = data[(data['max_time_factor'] == max_time_factor) &
                    (data['beta_factor'] == beta_factor) &
                    (data['transition_cost'] == transition_cost) &
                    (data['deterministic_policy_for_data_collection'] == deterministic_policy_for_data_collection) &
-                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training)]
+                   (data['first_episode_for_policy_training'] == first_episode_for_policy_training) &
+                   (data['sac_steps'] == sac_steps)]
 
 optimistic_data = filtered_df[filtered_df['exploration'] == 'optimistic']['plot_tuple']
 pets_data = filtered_df[filtered_df['exploration'] == 'pets']['plot_tuple']
