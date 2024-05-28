@@ -300,11 +300,13 @@ class GreenHouseEnv(Env):
         g_f = (params.f1 - params.f2 * d_p) * (params.qg ** ((t_g - params.Tg) / 10.0))
         g_l = g_f * params.v1 * jnp.exp(params.v2 * (t_g - params.v3))
         b = self.buffer_switching_func(mb, params.b1)
-        buff_1 = b * (params.f * g_f * mf + params.v * g_l * ml / params.z)
+        buff_1 = self.buffer_switching_func(params.f * g_f * mf + params.v * g_l * ml / params.z, params.b1)
+        # buff_1 = b * (params.f * g_f * mf + params.v * g_l * ml / params.z)
         factor = (params.qr ** ((t_g - params.Tg) / 10.0))
         rf = params.MF * factor
         rl = params.ML * factor
-        buff_2 = b * (rf * mf + rl * ml / params.z)
+        buff_2 = self.buffer_switching_func(rf * mf + rl * ml / params.z, params.b1)
+        # buff_2 = b * (rf * mf + rl * ml / params.z)
         dmb_dt = self.get_crop_photosynthesis(obs, action, params) - buff_1 - buff_2
         h = self.get_harvest_coefficient(obs, action, params)
         hf, hl = h * params.yf, h * params.yl
