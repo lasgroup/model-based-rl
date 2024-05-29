@@ -17,8 +17,8 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
 
-log_wandb = True
-ENTITY = 'trevenl'
+log_wandb = False
+ENTITY = 'kiten'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',

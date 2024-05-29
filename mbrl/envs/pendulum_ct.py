@@ -1,4 +1,5 @@
 import jax
+from brax import base
 from brax.envs.base import PipelineEnv, State, Env
 import chex
 from flax import struct
@@ -7,26 +8,34 @@ from jaxtyping import Float, Array
 from functools import partial
 
 from mbrl.utils.tolerance_reward import ToleranceReward
+from mbrl.envs.pendulum import PendulumDynamicsParams as Dynamicsparams, PendulumRewardParams as RewardParams
 
 
 @chex.dataclass
-class PendulumDynamicsParams:
-    max_speed: chex.Array = struct.field(default_factory=lambda: jnp.array(8.0))
-    max_torque: chex.Array = struct.field(default_factory=lambda: jnp.array(2.0))
-    dt: chex.Array = struct.field(default_factory=lambda: jnp.array(0.05))
-    g: chex.Array = struct.field(default_factory=lambda: jnp.array(9.81))
-    m: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
-    l: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
+class PendulumDynamicsParams(Dynamicsparams):
+    pass
 
 
 @chex.dataclass
-class PendulumRewardParams:
-    control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.02))
-    angle_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
-    target_angle: chex.Array = struct.field(default_factory=lambda: jnp.array(0.0))
+class PendulumRewardParams(RewardParams):
+    pass
 
 
-class PendulumEnv(Env):
+# class StateDerivative (base.State):
+#     """
+#     Pipeline state to store the state derivative.
+#     """
+#     def __init__(self, qd: jnp.ndarray):
+#         """
+#         Initialize StateDerivative with only the joint velocity vector (qd).
+# 
+#         Args:
+#             qd (jnp.ndarray): Joint velocity vector.
+#         """
+#         super().__init__(jnp.array([]), qd, None, None, None)
+
+
+class ContinuousPendulumEnv(Env):
     def __init__(self, reward_source: str = 'gym'):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
@@ -93,7 +102,7 @@ class PendulumEnv(Env):
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
 
-        next_state = State(pipeline_state=state.pipeline_state,
+        next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
                            obs=next_obs,
                            reward=next_reward,
                            done=state.done,
@@ -131,3 +140,17 @@ class PendulumEnv(Env):
 
     def backend(self) -> str:
         return 'positional'
+    
+    @property
+    def derivative_size(self) -> int:
+        # TODO: Find more elegant way to retrieve this
+        # TODO: Keep at 3!
+        return 2
+
+
+if __name__ == "__main__":
+    env = ContinuousPendulumEnv()
+    initial_state = env.reset(jax.numpy.zeros(0))
+    initial_action = jax.numpy.zeros(env.action_size)
+    next_state = env.step(initial_state, initial_action)
+    print("1") # TODO: Remove
