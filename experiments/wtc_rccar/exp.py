@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import chex
 import jax.numpy as jnp
@@ -14,15 +15,14 @@ from distrax import Normal
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+from wtc.envs.rccar import RCCar
 from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
-from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
-from mbrl.utils.offline_data import WhenToControlWrapper
 
 log_wandb = True
-ENTITY = 'trevenl'
+ENTITY = 'sukhijab'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -69,13 +69,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   transition_cost=transition_cost
                   )
 
-    base_env = PendulumEnv(reward_source='dm-control')
+    base_env = RCCar(margin_factor=20, dt=0.04)
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = max_time_factor * base_env.dt
 
-    running_reward_max_bound = 20.0
-    running_reward_min_bound = -1.0
+    running_reward_max_bound = 25.0 + 5  # We add some margin
+    running_reward_min_bound = -0.25 - 1  # We add some margin
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=horizon,
@@ -88,7 +88,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     class TransitionReward(Reward):
         def __init__(self):
-            super().__init__(x_dim=2, u_dim=1)
+            super().__init__(x_dim=7, u_dim=2)
 
         def __call__(self,
                      x: chex.Array,
@@ -101,21 +101,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': 0.05}
-
-    offline_data_gen = WhenToControlWrapper(
-        num_integrator_steps=horizon,
-        min_time_between_switches=min_time_between_switches,
-        max_time_between_switches=max_time_between_switches
-    )
+            return {'dt': 0.04}
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
-    offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
-                                                       num_samples=num_offline_samples)
-
     if num_offline_samples == 0:
         offline_data = None
+    else:
+        raise NotImplementedError('Offline data not implemented yet.')
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -186,7 +179,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
-        'reward_scaling': 1.,
+        'reward_scaling': 10.,
         'tau': 0.005,
         'min_replay_size': 10 ** 3,
         'max_replay_size': sac_steps,
@@ -197,7 +190,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (64, 64,),
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
         'non_equidistant_time': True,
         'continuous_discounting': continuous_discounting,

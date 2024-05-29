@@ -20,8 +20,10 @@ required = [
     'tensorflow>=2.13.0',
     'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git',
     'bsm @ git+https://github.com/lasgroup/bayesian_statistical_models.git',
+    'wtc @ git+ssh://git@github.com/lenarttreven/when_to_control.git',
     'ray',
 ]
+
 
 extras = {}
 setup(

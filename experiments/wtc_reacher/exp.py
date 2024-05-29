@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import chex
 import jax.numpy as jnp
@@ -17,9 +18,8 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
-from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
-from mbrl.utils.offline_data import WhenToControlWrapper
+from wtc.envs.reacher_dm_control import ReacherDMControl
 
 log_wandb = True
 ENTITY = 'trevenl'
@@ -69,13 +69,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   transition_cost=transition_cost
                   )
 
-    base_env = PendulumEnv(reward_source='dm-control')
+    base_env = ReacherDMControl(backend='generalized')
 
     min_time_between_switches = 1 * base_env.dt
     max_time_between_switches = max_time_factor * base_env.dt
 
-    running_reward_max_bound = 20.0
-    running_reward_min_bound = -1.0
+    running_reward_max_bound = 50.0 + 5  # We add some margin
+    running_reward_min_bound = -2 - 1  # We add some margin
 
     env = IHSwitchCostWrapper(base_env,
                               num_integrator_steps=horizon,
@@ -88,7 +88,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     class TransitionReward(Reward):
         def __init__(self):
-            super().__init__(x_dim=2, u_dim=1)
+            super().__init__(x_dim=11, u_dim=2)
 
         def __call__(self,
                      x: chex.Array,
@@ -101,21 +101,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': 0.05}
-
-    offline_data_gen = WhenToControlWrapper(
-        num_integrator_steps=horizon,
-        min_time_between_switches=min_time_between_switches,
-        max_time_between_switches=max_time_between_switches
-    )
+            return {'dt': 0.02}
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
-    offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
-                                                       num_samples=num_offline_samples)
-
     if num_offline_samples == 0:
         offline_data = None
+    else:
+        raise NotImplementedError('Offline data not implemented yet.')
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -163,7 +156,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             logging_frequency=100,
         )
 
-    discount_factor = 0.99
+    discount_factor = 0.95
     continuous_discounting = discrete_to_continuous_discounting(discrete_discounting=discount_factor,
                                                                 dt=env.dt)
 
@@ -186,7 +179,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
-        'reward_scaling': 1.,
+        'reward_scaling': 10.,
         'tau': 0.005,
         'min_replay_size': 10 ** 3,
         'max_replay_size': sac_steps,
@@ -197,7 +190,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (64, 64,),
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
         'non_equidistant_time': True,
         'continuous_discounting': continuous_discounting,
@@ -253,7 +246,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
         running_reward_min_bound=running_reward_min_bound,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
-        max_collected_data_in_buffer=max_replay_size_true_data_buffer
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer,
+        save_trajectory_transitions=True
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -289,7 +283,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
     parser.add_argument('--num_offline_samples', type=int, default=0)
-    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--sac_horizon', type=int, default=32)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=50)
@@ -301,10 +295,10 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--max_time_factor', type=int, default=30)
+    parser.add_argument('--max_time_factor', type=int, default=10)
     parser.add_argument('--beta_factor', type=float, default=2.0)
-    parser.add_argument('--horizon', type=int, default=100)
-    parser.add_argument('--transition_cost', type=float, default=0.1)
+    parser.add_argument('--horizon', type=int, default=50)
+    parser.add_argument('--transition_cost', type=float, default=0.5)
 
     args = parser.parse_args()
     main(args)
