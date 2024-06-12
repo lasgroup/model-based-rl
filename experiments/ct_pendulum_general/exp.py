@@ -32,7 +32,8 @@ def experiment(project_name: str = 'CT_Pendulum',
                first_episode_for_policy_training: int = -1,
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
-               regression_model: str = 'probabilistic_ensemble'
+               regression_model: str = 'probabilistic_ensemble',
+               beta: float = 2.0
                ):
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -64,7 +65,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             output_dim=env.observation_size,
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
-            beta=2.0 * jnp.ones(shape=(env.observation_size,)),
+            beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
@@ -76,12 +77,13 @@ def experiment(project_name: str = 'CT_Pendulum',
             weight_decay=0.0,
         )
     elif regression_model == 'FSVGD':
+        # For optimistic case: Tune beta and stuff
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
             output_dim=env.observation_size,
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
-            beta=2.0 * jnp.ones(shape=(env.observation_size,)),
+            beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
@@ -223,7 +225,8 @@ def main(args):
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
-               regression_model=args.regression_model
+               regression_model=args.regression_model,
+               beta=args.beta
                )
 
 
@@ -241,6 +244,8 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
+    parser.add_argument('--beta', type=float, default=2.0)
+
 
     args = parser.parse_args()
     main(args)
