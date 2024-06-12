@@ -22,6 +22,10 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
                       optimizer=optimizer)
         actor.set_system(system=system)
         return actor
+    
+
+class ContinuousOptimisticModelBasedAgent(OptimisticModelBasedAgent):
+    pass
 
 
 if __name__ == "__main__":

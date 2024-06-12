@@ -37,7 +37,7 @@ def env_step(
         action=action,
         reward=next_env_state.reward,
         discount=1 - next_env_state.done,
-        next_observation=next_env_state.obs,
+        next_observation=next_env_state.pipeline_state.qd,
         extras={'state_extras': state_extras})
 
 

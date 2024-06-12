@@ -14,14 +14,14 @@ from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
-from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
+from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
+from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 
 log_wandb = False
 ENTITY = 'kiten'
 
 
-def experiment(project_name: str = 'GPUSpeedTest',
+def experiment(project_name: str = 'CT_Pendulum',
                num_offline_samples: int = 100,
                sac_horizon: int = 100,
                deterministic_policy_for_data_collection: bool = False,
@@ -30,7 +30,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                sac_steps: int = 1_000_000,
                bnn_steps: int = 5_000,
                first_episode_for_policy_training: int = -1,
-               exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
+               exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble'
                ):
@@ -51,7 +51,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   regression_model=regression_model
                   )
 
-    env = PendulumEnv(reward_source='dm-control')
+    env = ContinuousPendulumEnv(reward_source='dm-control')
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -134,7 +134,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
     }
 
@@ -160,9 +160,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent_class = None
     if exploration == 'optimistic':
-        agent_class = OptimisticModelBasedAgent
+        agent_class = ContinuousOptimisticModelBasedAgent
     elif exploration == 'pets':
-        agent_class = PETSModelBasedAgent
+        agent_class = ContinuousPETSModelBasedAgent
 
     class PendulumReward(Reward):
         def __init__(self):
@@ -229,7 +229,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='Model_based_pets')
+    parser.add_argument('--project_name', type=str, default='CT_Pendulum')
     parser.add_argument('--num_offline_samples', type=int, default=200)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)

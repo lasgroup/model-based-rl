@@ -1,7 +1,7 @@
 from .base_model_based_agent import BaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
-from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics
+from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics, ContinuousPetsSystem, ContinuousPetsDynamics
 
 
 class PETSModelBasedAgent(BaseModelBasedAgent):
@@ -12,6 +12,26 @@ class PETSModelBasedAgent(BaseModelBasedAgent):
                       optimizer: BaseOptimizer,
                       ) -> Actor:
         dynamics, system, actor = PetsDynamics, PetsSystem, PetsActor
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
+    
+
+class ContinuousPETSModelBasedAgent(BaseModelBasedAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = ContinuousPetsDynamics, ContinuousPetsSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size)

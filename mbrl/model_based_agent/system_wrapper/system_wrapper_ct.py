@@ -26,7 +26,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
                  u_dim: int,
                  statistical_model: StatisticalModel,
                  aleatoric_noise_in_prediction: bool = True,
-                 predict_difference: bool = True,
+                 predict_difference: bool = False,
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.statistical_model = statistical_model
@@ -53,6 +53,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         if self.predict_difference:
+            raise NotImplementedError
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std
@@ -60,11 +61,13 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
             delta_x = delta_x_dist.sample(seed=key_sample_x_next)
             x_next = x + delta_x
         else:
+            dt = 0.05
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std
-            x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
-            x_next = x_next_dist.sample(seed=key_sample_x_next)
+            dx_dist = Normal(loc=model_output.mean, scale=scale_std)
+            dx_next = dx_dist.sample(seed=key_sample_x_next)
+            x_next = x + dx_next*dt
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,

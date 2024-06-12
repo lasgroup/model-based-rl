@@ -50,7 +50,7 @@ class ContinuousPendulumEnv(Env):
 
     def reset(self,
               rng: jax.Array) -> State:
-        return State(pipeline_state=None,
+        return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0), )
@@ -90,10 +90,11 @@ class ContinuousPendulumEnv(Env):
         thdot = x[-1]
         dt = self.dynamics_params.dt
         x_compressed = jnp.array([th, thdot])
-        dx = self.ode(x_compressed, action)
-        newth = th + dx[0] * dt
-        newthdot = thdot + dx[-1] * dt
-        newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed)
+        dx_compressed = self.ode(x_compressed, action)
+        newth = th + dx_compressed[0] * dt
+        newthdot = thdot + dx_compressed[-1] * dt # Compute dx with this?
+        newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed) # == dx_compressed[0]
+        dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, dx_compressed[-1]]).reshape(-1)
         next_obs = jnp.asarray([jnp.cos(newth), jnp.sin(newth), newthdot]).reshape(-1)
         if self.reward_source == 'gym':
             next_reward = self.reward(x, action)
@@ -141,16 +142,14 @@ class ContinuousPendulumEnv(Env):
     def backend(self) -> str:
         return 'positional'
     
-    @property
-    def derivative_size(self) -> int:
-        # TODO: Find more elegant way to retrieve this
-        # TODO: Keep at 3!
-        return 2
-
 
 if __name__ == "__main__":
     env = ContinuousPendulumEnv()
     initial_state = env.reset(jax.numpy.zeros(0))
-    initial_action = jax.numpy.zeros(env.action_size)
+    initial_action = jax.numpy.ones(env.action_size)
     next_state = env.step(initial_state, initial_action)
+
+    for ii in range(10):
+        next_state = env.step(next_state, initial_action)
+
     print("1") # TODO: Remove
