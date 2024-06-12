@@ -83,7 +83,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
         return DynamicsParams(key=key, statistical_model_state=model_state)
 
 
-class OptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
+class ContinuousOptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u_dim = self.x_dim + self.u_dim
@@ -100,10 +100,13 @@ class OptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         model_output = self.statistical_model(input=z,
                                               statistical_model_state=dynamics_params.statistical_model_state)
         if self.predict_difference:
+            raise NotImplementedError
             delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
             x_next = x + delta_x
         else:
-            x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            dt = 0.05
+            dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            x_next = x + dx_next*dt
 
         # Concatenate state and last num_frame_stack actions
         aleatoric_std = model_output.aleatoric_std
@@ -274,8 +277,8 @@ class ContinuousPetsSystem(System, Generic[ModelState, RewardParams]):
         return self.vmap_input_axis(data_axis=axes)
 
 
-class OptimisticSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: OptimisticDynamics[ModelState], reward: Reward[RewardParams]):
+class ContinuousOptimisticSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: ContinuousOptimisticDynamics[ModelState], reward: Reward[RewardParams]):
         super().__init__(dynamics, reward)
 
     def get_reward(self,

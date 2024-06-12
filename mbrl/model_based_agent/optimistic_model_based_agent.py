@@ -1,7 +1,7 @@
 from .base_model_based_agent import BaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor
-from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics
+from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics, ContinuousOptimisticSystem, ContinuousOptimisticDynamics
 
 
 class OptimisticModelBasedAgent(BaseModelBasedAgent):
@@ -24,9 +24,24 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
         return actor
     
 
-class ContinuousOptimisticModelBasedAgent(OptimisticModelBasedAgent):
-    pass
+class ContinuousOptimisticModelBasedAgent(BaseModelBasedAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = ContinuousOptimisticDynamics, ContinuousOptimisticSystem, OptimisticActor
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
 
 if __name__ == "__main__":
     from mbrl.envs.pendulum import PendulumEnv
