@@ -67,7 +67,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
             scale_std = model_output.epistemic_std
             dx_dist = Normal(loc=model_output.mean, scale=scale_std)
             dx_next = dx_dist.sample(seed=key_sample_x_next)
-            x_next = x + dx_next*dt
+            x_next = x + dx_next * dt
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,

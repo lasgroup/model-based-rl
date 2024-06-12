@@ -104,13 +104,13 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     discount_factor = 0.99
 
-    num_envs = 64
+    num_envs = 128
     num_env_steps_between_updates = 20
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 20,
-        'num_envs': 64,
+        'num_env_steps_between_updates': num_env_steps_between_updates,
+        'num_envs': num_envs,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -120,19 +120,19 @@ def experiment(project_name: str = 'CT_Pendulum',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 32,
+        'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
-        'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': num_envs * num_env_steps_between_updates // 2,
+        'max_replay_size': sac_steps,
+        'grad_updates_per_step': num_envs * num_env_steps_between_updates,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_hidden_layer_sizes': (64,) * 3,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_hidden_layer_sizes': (64,) * 3,
         'critic_activation': swish,
         'wandb_logging': log_wandb,
         'return_best_model': True,
@@ -166,7 +166,7 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     class PendulumReward(Reward):
         def __init__(self):
-            super().__init__(x_dim=2, u_dim=1)
+            super().__init__(x_dim=3, u_dim=1)
 
         def __call__(self,
                      x: chex.Array,
