@@ -17,7 +17,7 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 
-log_wandb = False
+log_wandb = True
 ENTITY = 'kiten'
 
 
@@ -68,7 +68,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
@@ -85,7 +85,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
