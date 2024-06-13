@@ -49,7 +49,8 @@ def experiment(project_name: str = 'CT_Pendulum',
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
-                  regression_model=regression_model
+                  regression_model=regression_model,
+                  beta=beta
                   )
 
     env = ContinuousPendulumEnv(reward_source='dm-control')

@@ -11,7 +11,7 @@ general_configs = {
     'sac_steps': [1_000_000],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['pets','optimistic'],
+    'exploration': ['optimistic'],
     'reset_statistical_model': [1],
     'regression_model': ['FSVGD'],
     'beta': [0.5, 1.0, 2.0, 5.0],
