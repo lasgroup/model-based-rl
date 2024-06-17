@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['CT_PendulumGeneral_June13_15_00'],
+    'project_name': ['CT_PendulumGeneral_June17_18_00'],
     'num_offline_samples': [0],
     'sac_horizon': [64,100,200],
     'deterministic_policy_for_data_collection': [0, 1],
