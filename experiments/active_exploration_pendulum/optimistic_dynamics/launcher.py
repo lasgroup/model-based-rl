@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'opax_optimistic_April_test2'
+PROJECT_NAME = 'opax_optimistic_June17_18_00'
 
 general_configs = {
     'seed': list(range(5)),

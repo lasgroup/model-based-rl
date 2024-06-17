@@ -16,7 +16,7 @@ from mbrl.envs.pendulum import PendulumEnv
 from mbrl.model_based_agent.active_exploration_model_based_agents import PetsActiveExplorationModelBasedAgent
 from mbrl.utils.offline_data import PendulumOfflineData
 
-ENTITY = 'sukhijab'
+ENTITY = 'kiten'
 
 
 def experiment(
