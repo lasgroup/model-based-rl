@@ -58,6 +58,13 @@ Repository for doing model based RL
 
 5. set up wandb: https://docs.wandb.ai/quickstart
 
+5. activate virtual env: source copax/venv/bin/activate
+
+5. add mbrl to your python path: ```PYTHONPATH=$PYTHONPATH:/cluster/home/kiten/copax/model-based-rl```. You can also add this to your .bashrc file.
+
+6. Launch experiments with the launcher: ```python path/to/model-based-rl/experiments/ct_pendulum_general/launcher.py ```
+
+
 6. TODOs and Notes
     - Check envs --> State Class --> Continuous State --> Change state class from brax
         - Maybe store the derivative in the pipeline state in env. That's basically where you dump all the unwanted stuff. So it doesn't fuck up Brax

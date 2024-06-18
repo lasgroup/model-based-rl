@@ -154,7 +154,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
             print(f'End of policy training')
         # We collect new data with the current policy
         print(f'Start of data collection')
-        agent_state = self.simulate_on_true_env(agent_state=agent_state)
+        agent_state, trajectory_transitions = self.simulate_on_true_env(agent_state=agent_state)
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
         if episode_idx % self.eval_frequency == 0:
