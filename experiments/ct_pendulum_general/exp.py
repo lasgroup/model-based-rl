@@ -6,7 +6,7 @@ import jax.random as jr
 import wandb
 from brax.training.replay_buffers import UniformSamplingQueue
 from brax.training.types import Transition
-from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
+from bsm.bayesian_regression import ProbabilisticEnsemble, DeterministicFSVGDEnsemble, ProbabilisticFSVGDEnsemble
 from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
 from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
 from distrax import Normal
@@ -33,11 +33,12 @@ def experiment(project_name: str = 'CT_Pendulum',
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
-               beta: float = 2.0
+               beta: float = 2.0,
+               weight_decay: float = 0.0
                ):
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
-    assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -50,7 +51,8 @@ def experiment(project_name: str = 'CT_Pendulum',
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
-                  beta=beta
+                  beta=beta,
+                  weight_decay=weight_decay
                   )
 
     env = ContinuousPendulumEnv(reward_source='dm-control')
@@ -74,10 +76,44 @@ def experiment(project_name: str = 'CT_Pendulum',
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
-            eval_frequency=500,
-            weight_decay=0.0,
+            eval_frequency=5_000,
+            weight_decay=weight_decay,
         )
-    elif regression_model == 'FSVGD':
+    elif regression_model == 'deterministic_ensemble':
+        model = BNNStatisticalModel(
+            input_dim=env.observation_size + env.action_size,
+            output_dim=env.observation_size,
+            num_training_steps=bnn_steps,
+            output_stds=1e-3 * jnp.ones(env.observation_size),
+            beta=beta * jnp.ones(shape=(env.observation_size,)),
+            features=(256,) * 2,
+            num_particles=10,
+            logging_wandb=log_wandb,
+            return_best_model=True,
+            eval_batch_size=64,
+            train_share=0.8,
+            eval_frequency=5_000,
+            weight_decay=weight_decay,
+        )
+    elif regression_model == 'deterministic_FSVGD':
+        # For optimistic case: Tune beta and stuff
+        model = BNNStatisticalModel(
+            input_dim=env.observation_size + env.action_size,
+            output_dim=env.observation_size,
+            num_training_steps=bnn_steps,
+            output_stds=1e-3 * jnp.ones(env.observation_size),
+            beta=beta * jnp.ones(shape=(env.observation_size,)),
+            features=(64, 64, 64),
+            bnn_type=DeterministicFSVGDEnsemble,
+            num_particles=10,
+            logging_wandb=log_wandb,
+            return_best_model=True,
+            eval_batch_size=64,
+            train_share=0.8,
+            eval_frequency=5_000,
+            weight_decay=weight_decay,
+        )
+    elif regression_model == 'probabilistic_FSVGD':
         # For optimistic case: Tune beta and stuff
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
@@ -92,8 +128,8 @@ def experiment(project_name: str = 'CT_Pendulum',
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
-            eval_frequency=500,
-            weight_decay=0.0,
+            eval_frequency=5_000,
+            weight_decay=weight_decay,
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
@@ -227,7 +263,8 @@ def main(args):
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
-               beta=args.beta
+               beta=args.beta,
+               weight_decay=args.weight_decay
                )
 
 
@@ -244,8 +281,9 @@ if __name__ == '__main__':
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='FSVGD')
+    parser.add_argument('--regression_model', type=str, default='deterministic_FSVGD')
     parser.add_argument('--beta', type=float, default=2.0)
+    parser.add_argument('--weight_decay', type=float, default=0.0)
 
 
     args = parser.parse_args()

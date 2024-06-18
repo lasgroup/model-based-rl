@@ -175,3 +175,6 @@ temp/
 .idea/
 
 .DS_Store
+
+# Ignore slurm files on Euler Cluster
+slurm-*.out
