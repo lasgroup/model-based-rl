@@ -8,7 +8,7 @@ general_configs = {
     'deterministic_policy_for_data_collection': [0, 1],
     'seed': list(range(5)),
     'num_episodes': [30],
-    'sac_steps': [1_000_000],
+    'sac_steps': [500_000, 1_000_000],
     'bnn_steps': [15_000, 50_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['pets','optimistic'],

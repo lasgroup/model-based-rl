@@ -8,13 +8,14 @@ general_configs = {
     'deterministic_policy_for_data_collection': [0, 1],
     'seed': list(range(5)),
     'num_episodes': [30],
-    'sac_steps': [1_000_000],
+    'sac_steps': [500_000, 1_000_000],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic'],
     'reset_statistical_model': [1],
-    'regression_model': ['FSVGD'],
+    'regression_model': ['deterministic_ensemble'],
     'beta': [0.5, 1.0, 2.0, 5.0],
+    'weight_decay': [0.0, 1e-4],
 }
 
 
@@ -30,7 +31,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='23:59:00',
+                          duration='8:59:00',
                           prompt=True,
                           mem=16000)
 
