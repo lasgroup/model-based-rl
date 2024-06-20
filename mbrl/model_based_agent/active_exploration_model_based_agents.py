@@ -170,7 +170,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                                                         actor_state=opt_state)
                 metrics = {k + '_task_' + str(i): v for k, v in metrics.items()}
                 if self.log_to_wandb:
-                    wandb.log(metrics)
+                    wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
             print(f'End with evaluation of the policy')

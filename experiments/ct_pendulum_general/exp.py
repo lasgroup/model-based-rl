@@ -247,7 +247,9 @@ def experiment(project_name: str = 'CT_Pendulum',
                                      start_from_scratch=True,
                                      key=key_agent)
 
+    print("Finishing wandb")
     wandb.finish()
+    print("Ended wandb")
 
 
 def main(args):
@@ -266,6 +268,7 @@ def main(args):
                beta=args.beta,
                weight_decay=args.weight_decay
                )
+    print("Finished experiment")
 
 
 if __name__ == '__main__':

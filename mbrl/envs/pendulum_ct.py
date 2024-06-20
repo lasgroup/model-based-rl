@@ -6,6 +6,7 @@ from flax import struct
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 from functools import partial
+import copy
 
 from mbrl.utils.tolerance_reward import ToleranceReward
 from mbrl.envs.pendulum import PendulumDynamicsParams as Dynamicsparams, PendulumRewardParams as RewardParams
@@ -50,10 +51,12 @@ class ContinuousPendulumEnv(Env):
 
     def reset(self,
               rng: jax.Array) -> State:
+        first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0])}
         return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
-                     done=jnp.array(0.0), )
+                     done=jnp.array(0.0), 
+                     info=first_info)
 
     def reward(self,
                x: Float[Array, 'observation_dim'],
@@ -103,12 +106,15 @@ class ContinuousPendulumEnv(Env):
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
 
+        next_info = copy.deepcopy(state.info)
+        next_info['derivative'] = dx
+
         next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
                            obs=next_obs,
                            reward=next_reward,
                            done=state.done,
                            metrics=state.metrics,
-                           info=state.info)
+                           info=next_info)
         return next_state
 
     def ode(self, x_compressed: chex.Array, u: chex.Array) -> chex.Array:
