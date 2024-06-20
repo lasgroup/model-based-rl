@@ -37,7 +37,7 @@ def env_step(
         action=action,
         reward=next_env_state.reward,
         discount=1 - next_env_state.done,
-        next_observation=next_env_state.pipeline_state.qd,
+        next_observation=next_env_state.obs,
         extras={'state_extras': state_extras})
 
 
@@ -153,6 +153,7 @@ class EnvInteractor:
                  num_eval_envs: int = 128,
                  deterministic_policy_for_data_collection: bool = True,
                  eval_env: BraxEnv | None = None,
+                 extra_fields: Sequence[str] = (),
                  ):
         self.episode_length = episode_length
         self.action_repeat = action_repeat
@@ -165,6 +166,7 @@ class EnvInteractor:
             episode_length=self.episode_length,
             action_repeat=self.action_repeat,
         )
+        self.extra_fields = extra_fields
 
         if not eval_env:
             eval_env = env
@@ -189,7 +191,7 @@ class EnvInteractor:
                            ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
             self.env, env_state, actor, opt_state,
-            extra_fields=(),
+            extra_fields=self.extra_fields,
             evaluate=self.deterministic_policy_for_data_collection)
         return env_state, new_opt_state, transitions
 

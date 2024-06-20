@@ -1,4 +1,5 @@
 from .base_model_based_agent import BaseModelBasedAgent
+from .continuous_base_model_based_agent import ContinuousBaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
 from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics, ContinuousPetsSystem, ContinuousPetsDynamics
@@ -24,7 +25,7 @@ class PETSModelBasedAgent(BaseModelBasedAgent):
         return actor
     
 
-class ContinuousPETSModelBasedAgent(BaseModelBasedAgent):
+class ContinuousPETSModelBasedAgent(ContinuousBaseModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

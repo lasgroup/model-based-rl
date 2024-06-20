@@ -165,7 +165,7 @@ class BaseModelBasedAgent(ABC):
                                         collected_buffer_state: ReplayBufferState):
         idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
         all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
-        all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
+        all_transitions: Transition = self.collected_data_buffer._unflatten_fn(all_data)
         obs = all_transitions.observation
         actions = all_transitions.action
         inputs = jnp.concatenate([obs, actions], axis=-1)
