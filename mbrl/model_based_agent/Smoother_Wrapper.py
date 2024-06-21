@@ -96,7 +96,7 @@ def simulate_on_true_env(self,
     dx, transitions = self.get_dx(key_smoother, transitions)
     state_extras = transitions.extras
     state_extras['state_extras']['derivative'] = dx
-    transitions = transitions._replace(state_extras=state_extras)
+    transitions = transitions._replace(extras=state_extras)
     collected_data_buffer_state = agent_state.optimizer_state.true_buffer_state
     collected_data_buffer_state = self.collected_data_buffer.insert(buffer_state=collected_data_buffer_state,
                                                                     samples=transitions)
