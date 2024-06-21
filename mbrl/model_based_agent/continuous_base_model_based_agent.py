@@ -36,13 +36,13 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
         self.collected_data_buffer = self.prepare_data_buffers()
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
-        extras: dict = {x: jnp.zeros(shape=(self.env.observation_size,)) for x in self.env_interactor.extra_fields}
+        state_extras: dict = {x: jnp.zeros(shape=(self.env.observation_size,)) for x in self.env_interactor.extra_fields}
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
                                   action=jnp.zeros(shape=(self.env.action_size,)),
                                   reward=jnp.array(0.0),
                                   discount=jnp.array(0.99),
                                   next_observation=jnp.zeros(shape=(self.env.observation_size,)),
-                                  extras=extras
+                                  extras={'state_extras': state_extras}
                                   )
 
         collected_data_buffer = UniformSamplingQueue(
@@ -60,7 +60,7 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
         actions = all_transitions.action
         inputs = jnp.concatenate([obs, actions], axis=-1)
         next_obs = all_transitions.next_observation
-        derivatives = all_transitions.extras['derivative']
+        derivatives = all_transitions.extras['state_extras']['derivative']
         if self.predict_difference:
             raise NotImplementedError
         else:
