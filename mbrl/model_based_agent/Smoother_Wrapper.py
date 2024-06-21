@@ -4,11 +4,32 @@ from typing import Tuple
 from jax import jit
 from functools import partial
 from brax.training.types import Transition
+from brax.training.replay_buffers import UniformSamplingQueue
 import types
 
 from bsm.utils.normalization import Data
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
 from differentiators.nn_smoother import smoother_net
+
+###
+# To-Do:
+# - Check the implementation of wrappers in gym
+# - Change the way the agent is initiated (so that we dont run separate prepare_data_buffers)
+
+def prepare_data_buffers(self) -> UniformSamplingQueue:
+    dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
+                              action=jnp.zeros(shape=(self.env.action_size,)),
+                              reward=jnp.array(0.0),
+                              discount=jnp.array(0.99),
+                              next_observation=jnp.zeros(shape=(self.env.observation_size,)),
+                              extras={'state_extras': {'t': jnp.array(0.0),
+                                                       'derivative': jnp.zeros(shape=(self.env.observation_size,))}},
+                              )
+    collected_data_buffer = UniformSamplingQueue(
+        max_replay_size=self.max_collected_data_in_buffer,
+        dummy_data_sample=dummy_sample,
+        sample_batch_size=1)
+    return collected_data_buffer
 
 def get_dx(self,
            key: jr.PRNGKey,
@@ -112,6 +133,10 @@ def Smoother_Wrapper(agent_class,
     # Create an instance of the agent
     agent = agent_class(*args, **kwargs)
     agent.state_data_source = state_data_source
+
+    # Add the prepare_data_buffers function to the agent
+    agent.prepare_data_buffers = types.MethodType(prepare_data_buffers, agent)
+    agent.collected_data_buffer = agent.prepare_data_buffers()
 
     # Initialise the smoother
     agent.smoother_model = smoother
