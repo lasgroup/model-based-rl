@@ -53,7 +53,8 @@ class ContinuousPendulumEnv(Env):
         return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
-                     done=jnp.array(0.0), )
+                     done=jnp.array(0.0),
+                     info={'t': jnp.array(0.0)})
 
     def reward(self,
                x: Float[Array, 'observation_dim'],
@@ -102,6 +103,10 @@ class ContinuousPendulumEnv(Env):
             next_reward = self.dm_reward(x, action)
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
+
+        info = state.info
+        info['t'] = info['t'] + self.dynamics_params.dt
+        state = state.replace(info=info)
 
         next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
                            obs=next_obs,
