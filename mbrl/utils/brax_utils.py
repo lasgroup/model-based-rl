@@ -47,7 +47,7 @@ def generate_unroll(
         actor: Actor,
         actor_state: OptimizerState,
         unroll_length: int,
-        extra_fields: Sequence[str] = (),
+        extra_fields: Sequence[str] = ('t'),
         evaluate: bool = False,
 ) -> Tuple[State, OptimizerState, Transition]:
     """Collect trajectories of given unroll_length."""
@@ -189,7 +189,7 @@ class EnvInteractor:
                            ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
             self.env, env_state, actor, opt_state,
-            extra_fields=(),
+            extra_fields=('t'),
             evaluate=self.deterministic_policy_for_data_collection)
         return env_state, new_opt_state, transitions
 
