@@ -16,8 +16,11 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
+from mbrl.model_based_agent.Smoother_Wrapper import Smoother_Wrapper
 
-log_wandb = True
+from differentiators.nn_smoother.smoother_net import SmootherNet
+
+log_wandb = False
 ENTITY = 'kiten'
 
 
@@ -143,6 +146,21 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     discount_factor = 0.99
 
+    smoother_model = SmootherNet(input_dim=1,
+                            output_dim=env.observation_size,
+                            output_stds=jnp.ones(shape=(env.observation_size,)) * 0.001,
+                            logging_wandb=False,
+                            beta=jnp.ones(shape=(env.observation_size,))*3,
+                            num_particles=5,
+                            features=[64, 64],
+                            bnn_type=DeterministicFSVGDEnsemble,
+                            train_share=1.0,
+                            num_training_steps=1_000,
+                            weight_decay=1e-4,
+                            return_best_model=True,
+                            eval_frequency=1000,
+                            )
+
     num_envs = 128
     num_env_steps_between_updates = 20
     sac_kwargs = {
@@ -227,7 +245,9 @@ def experiment(project_name: str = 'CT_Pendulum',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
-    agent = agent_class(
+    agent = Smoother_Wrapper(
+        agent_class=agent_class,
+        smoother=smoother_model,
         env=env,
         eval_env=env,
         statistical_model=model,
@@ -279,7 +299,7 @@ if __name__ == '__main__':
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
-    parser.add_argument('--exploration', type=str, default='pets')
+    parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='deterministic_FSVGD')
     parser.add_argument('--beta', type=float, default=2.0)
