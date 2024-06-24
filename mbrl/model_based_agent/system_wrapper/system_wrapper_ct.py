@@ -61,7 +61,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
             delta_x = delta_x_dist.sample(seed=key_sample_x_next)
             x_next = x + delta_x
         else:
-            dt = 0.05
+            dt = 0.001
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std

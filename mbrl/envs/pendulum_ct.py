@@ -53,7 +53,7 @@ class ContinuousPendulumEnv(Env):
               rng: jax.Array) -> State:
         first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
-                            'dt': jnp.array(0.05)}
+                            'dt': self.dynamics_params.dt}
         return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),

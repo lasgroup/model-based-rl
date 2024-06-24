@@ -13,7 +13,7 @@ from mbrl.utils.tolerance_reward import ToleranceReward
 class PendulumDynamicsParams:
     max_speed: chex.Array = struct.field(default_factory=lambda: jnp.array(8.0))
     max_torque: chex.Array = struct.field(default_factory=lambda: jnp.array(2.0))
-    dt: chex.Array = struct.field(default_factory=lambda: jnp.array(0.05))
+    dt: chex.Array = struct.field(default_factory=lambda: jnp.array(0.001))
     g: chex.Array = struct.field(default_factory=lambda: jnp.array(9.81))
     m: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
     l: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))

@@ -45,7 +45,7 @@ class BaseModelBasedAgent(ABC):
                  offline_data: Transition | None = None,
                  max_collected_data_in_buffer: int = 10 ** 4,
                  max_episodes: int = 100,
-                 predict_difference: bool = True,
+                 predict_difference: bool = False,
                  reset_statistical_model: bool = True,
                  key: chex.PRNGKey = jr.PRNGKey(0),
                  log_to_wandb: bool = False,
