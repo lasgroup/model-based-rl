@@ -247,9 +247,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
-    agent = Smoother_Wrapper(
-        agent_class=agent_class,
-        smoother=smoother_model,
+    agent = agent_class(
         env=env,
         eval_env=env,
         statistical_model=model,
@@ -264,8 +262,9 @@ def experiment(project_name: str = 'CT_Pendulum',
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
     )
+    wrapped_agent = Smoother_Wrapper(agent, smoother_model)
 
-    agent_state = agent.run_episodes(num_episodes=num_episodes,
+    agent_state = wrapped_agent.run_episodes(num_episodes=num_episodes,
                                      start_from_scratch=True,
                                      key=key_agent)
 
