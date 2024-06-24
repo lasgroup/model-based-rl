@@ -28,7 +28,7 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        extra_fields = ('derivative',)
+        extra_fields = ('derivative','t','dt')
 
         self.predict_difference = False
 
@@ -37,7 +37,8 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
         self.actor = self.prepare_actor(kwargs['optimizer']) # is this even necessary, i.e. does prepare_actor mthd use data buffer? Problem seems to be in optimizer-to-actor.
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
-        state_extras: dict = {x: jnp.zeros(shape=(self.env.observation_size,)) for x in self.env_interactor.extra_fields}
+        state_extras_shape  = (self.env.observation_size, 1, 1)
+        state_extras: dict = {x: jnp.zeros(shape=(y,)) for x,y in zip(self.env_interactor.extra_fields, state_extras_shape)}
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
                                   action=jnp.zeros(shape=(self.env.action_size,)),
                                   reward=jnp.array(0.0),

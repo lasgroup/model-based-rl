@@ -178,11 +178,17 @@ def experiment(project_name: str = 'CT_Pendulum',
     }
 
     max_replay_size_true_data_buffer = 10 ** 4
+
+    extra_fields = ('derivative', 't', 'dt')
+    extra_fields_shape = (env.observation_size, 1, 1)
+    state_extras: dict = {x: jnp.zeros(shape=(y,)) for x,y in zip(extra_fields, extra_fields_shape)}
+
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
                               action=jnp.zeros(shape=(env.action_size,)),
                               reward=jnp.array(0.0),
                               discount=jnp.array(discount_factor),
-                              next_observation=jnp.ones(env.observation_size))
+                              next_observation=jnp.ones(env.observation_size),
+                              extras={'state_extras': state_extras})
 
     sac_buffer = UniformSamplingQueue(
         max_replay_size=max_replay_size_true_data_buffer,

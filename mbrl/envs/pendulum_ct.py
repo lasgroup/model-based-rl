@@ -51,7 +51,9 @@ class ContinuousPendulumEnv(Env):
 
     def reset(self,
               rng: jax.Array) -> State:
-        first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0])}
+        first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
+                            't': jnp.array(0.0),
+                            'dt': jnp.array(0.05)}
         return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
@@ -108,6 +110,8 @@ class ContinuousPendulumEnv(Env):
 
         next_info = copy.deepcopy(state.info)
         next_info['derivative'] = dx
+        next_info['t'] = state.info['t'] + dt
+        next_info['dt'] = dt
 
         next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
                            obs=next_obs,
