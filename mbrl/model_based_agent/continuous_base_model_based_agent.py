@@ -34,6 +34,7 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
 
         self.env_interactor.extra_fields = extra_fields
         self.collected_data_buffer = self.prepare_data_buffers()
+        self.actor = self.prepare_actor(kwargs['optimizer']) # is this even necessary, i.e. does prepare_actor mthd use data buffer? Problem seems to be in optimizer-to-actor.
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
         state_extras: dict = {x: jnp.zeros(shape=(self.env.observation_size,)) for x in self.env_interactor.extra_fields}
