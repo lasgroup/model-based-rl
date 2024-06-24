@@ -45,7 +45,8 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
         dynamics, system, actor = ExplorationDynamics, ExplorationSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
@@ -82,7 +83,8 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
             model = copy.deepcopy(self.statistical_model)
             dynamics = dynamics_type(statistical_model=model,
                                      x_dim=self.env.observation_size,
-                                     u_dim=self.env.action_size)
+                                     u_dim=self.env.action_size,
+                                     predict_difference=self.predict_difference)
             system = system_type(dynamics=dynamics,
                                  reward=reward_model, )
             actor = actor_type(env_observation_size=self.env.observation_size,
@@ -205,7 +207,8 @@ class OptimisticActiveExplorationModelBasedAgent(PetsActiveExplorationModelBased
         dynamics, system, actor = OptimisticExplorationDynamics, OptimisticExplorationSystem, OptimisticActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,

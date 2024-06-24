@@ -47,7 +47,8 @@ class WhenToControlModelBasedAgent(BaseModelBasedAgent):
                             min_time_between_switches=self.min_time_between_switches,
                             max_time_between_switches=self.max_time_between_switches,
                             episode_time=self.episode_time,
-                            dt=self.dt)
+                            dt=self.dt,
+                            predict_difference=self.predict_difference)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
