@@ -5,16 +5,27 @@ import jax.numpy as jnp
 
 
 class Sigmoids:
+    possible_sigmoids = [
+        'gaussian',
+        'hyperbolic',
+        'long_tail',
+        'reciprocal',
+        'cosine',
+        'linear',
+        'quadratic',
+        'tanh_squared'
+    ]
+
     def __init__(self, sigmoid: str, value_at_the_margin: float = 0.1):
         self.sigmoid = sigmoid
         self.value_at_the_margin = value_at_the_margin
 
     def __call__(self, x, value_at_1):
-        if self.sigmoid == "gaussian":
+        if self.sigmoid == 'gaussian':
             return self._gaussian(x, value_at_1)
-        elif self.sigmoid == "hyperbolic":
+        elif self.sigmoid == 'hyperbolic':
             return self._hyperbolic(x, value_at_1)
-        elif self.sigmoid == "long_tail":
+        elif self.sigmoid == 'long_tail':
             return self._long_tail(x, value_at_1)
         elif self.sigmoid == 'reciprocal':
             return self._reciprocal(x, value_at_1)
@@ -26,6 +37,8 @@ class Sigmoids:
             return self._quadratic(x, value_at_1)
         elif self.sigmoid == 'tanh_squared':
             return self._tanh_squared(x, value_at_1)
+        else:
+            raise NotImplementedError(f"Invalid sigmoid type '{self.sigmoid}', must be in {self.possible_sigmoids}.")
 
     @staticmethod
     def _gaussian(x, value_at_1):
@@ -73,6 +86,22 @@ class Sigmoids:
 
 
 class ToleranceReward:
+    """
+    Computes a reward based on whether a given value falls within specified bounds, with an optional margin
+    that allows for a gradual decrease in reward outside the bounds.
+
+    The reward function can handle several sigmoid types provided by the Sigmoids class for smoothing the transition at the boundaries.
+
+    Attributes:
+        bounds (Tuple[float, float]): The lower and upper bounds for the tolerance range.
+        margin (float): The margin outside the bounds where the reward starts to decrease.
+        sigmoid (str): The type of sigmoid function to use for smoothing.
+        value_at_margin (float): The value of the sigmoid function at the edge of the margin.
+
+    Methods:
+        __call__(x: chex.Array) -> chex.Array:
+            Computes the reward for the given input x based on the bounds and margin.
+    """
     def __init__(self,
                  bounds: Tuple[float, float] = (0.0, 0.0),
                  margin: float = 0.0,
@@ -93,6 +122,16 @@ class ToleranceReward:
             raise ValueError('`margin` must be non-negative.')
 
     def __call__(self, x: chex.Array) -> chex.Array:
+        """
+        Compute the reward for the given input x  based on whether a given value falls within specified bounds, with an optional margin
+        that allows for a gradual decrease in reward outside the bounds.        
+        
+        Args:
+            x (chex.Array): Input array.
+
+        Returns:
+            chex.Array: Reward values based on the input.
+        """
         in_bounds = jnp.logical_and(self.lower <= x, x <= self.upper)
         if self.margin == 0:
             return jnp.where(in_bounds, 1.0, 0.0)
