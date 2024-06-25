@@ -323,7 +323,7 @@ class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
 
         # Concatenate state and last num_frame_stack actions
         aleatoric_std = model_output.aleatoric_std
-        if self.aleatoric_noise_in_prediction:
+        if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
