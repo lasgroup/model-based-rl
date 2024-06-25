@@ -246,7 +246,10 @@ def experiment(project_name: str = 'CT_Pendulum',
         log_to_wandb=log_wandb,
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         first_episode_for_policy_training=first_episode_for_policy_training,
+        predict_difference=False,
         reset_statistical_model=reset_statistical_model,
+        dt=env.dt,
+        extra_fields=extra_fields,
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
