@@ -3,14 +3,17 @@ import jax.random as jr
 from typing import Tuple
 import wandb
 import types
+import chex
 import matplotlib.pyplot as plt
 
 from brax.training.types import Transition
-from brax.training.replay_buffers import UniformSamplingQueue
+from brax.training.replay_buffers import UniformSamplingQueue, ReplayBufferState
 
 from bsm.utils.normalization import Data
+from bsm.utils import StatisticalModelState
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
 from diff_smoothers.smoother_net import SmootherNet
+from diff_smoothers.data_functions.data_output import plot_derivative_data
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
 
 # What is unclean about this implementation?
@@ -66,6 +69,51 @@ class SmootherWrapper(BaseAgentWrapper):
         optimizer_state = optimizer_state.replace(true_buffer_state=collected_data_buffer_state)
         env_steps = agent_state.env_steps + self.num_envs * self.episode_length
         return ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent), transitions
+
+    # Override the _update_statistical_model method to include logging of the dynamics model
+    def _update_statistical_model(self,
+                                  statistical_model_state: StatisticalModelState,
+                                  collected_data_buffer_state: ReplayBufferState,
+                                  key: chex.PRNGKey):
+        # We prepare data to train from the collected_data_buffer
+        data = self._collected_buffer_to_train_data(collected_data_buffer_state)
+        if self.reset_statistical_model:
+            statistical_model_state = self.statistical_model.init(key=key)
+        new_statistical_model_state = self.statistical_model.update(
+            stats_model_state=statistical_model_state,
+            data=data)
+        if self.log_to_wandb:
+            idx = jnp.arange(start=collected_data_buffer_state.sample_position, stop=collected_data_buffer_state.insert_position)
+            all_data = jnp.take(collected_data_buffer_state.data, idx, axis=0, mode='wrap')
+            all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
+            obs = all_transitions.observation
+            actions = all_transitions.action
+            t = all_transitions.extras['state_extras']['t']
+            true_dx = all_transitions.extras['state_extras']['true_derivative']
+            inputs = data.inputs
+            pred_dx = self.statistical_model.predict_batch(inputs, new_statistical_model_state)
+            fig = plot_derivative_data(t=t.reshape(-1,1),
+                                       x = obs,
+                                       x_dot_true=true_dx,
+                                       x_dot_est=pred_dx.mean,
+                                       x_dot_est_std=pred_dx.epistemic_std,
+                                       source='Dyn. Model',
+                                       beta = pred_dx.statistical_model_state.beta,
+                                       )
+            wandb.log({'dynamics_model/fit': wandb.Image(fig)})
+        return new_statistical_model_state
+    
+    def _collected_buffer_to_train_data(self,
+                                        collected_buffer_state: ReplayBufferState):
+        idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
+        all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
+        all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
+        obs = all_transitions.observation
+        actions = all_transitions.action
+        inputs = jnp.concatenate([obs, actions], axis=-1)
+        next_obs = all_transitions.next_observation
+        outputs = all_transitions.extras['state_extras']['derivative']
+        return Data(inputs=inputs, outputs=outputs)
 
     def _get_dx(self,
                key: jr.PRNGKey,

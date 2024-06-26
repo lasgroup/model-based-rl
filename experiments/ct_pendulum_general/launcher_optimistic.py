@@ -4,11 +4,11 @@ from experiments.util import generate_run_commands, generate_base_command, dict_
 general_configs = {
     'project_name': ['CT_PendulumGeneral_June17_18_00'],
     'num_offline_samples': [0],
-    'sac_horizon': [64,100,200],
+    'sac_horizon': [64, 128],
     'deterministic_policy_for_data_collection': [0, 1],
     'seed': list(range(5)),
     'num_episodes': [30],
-    'sac_steps': [500_000, 1_000_000],
+    'sac_steps': [500_000],
     'bnn_steps': [50_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic'],

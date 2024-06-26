@@ -264,12 +264,12 @@ def experiment(project_name: str = 'CT_Pendulum',
         'reset_statistical_model': reset_statistical_model,
     }
 
-    wrapped_agent = SmootherWrapper(agent_type=agent_class,
+    base_agent = SmootherWrapper(agent_type=agent_class,
                                      smoother_net=smoother_model,
                                      state_data_source='smoother',
                                      **agent_kwargs)
 
-    agent_state = wrapped_agent.run_episodes(num_episodes=num_episodes,
+    agent_state = base_agent.run_episodes(num_episodes=num_episodes,
                                      start_from_scratch=True,
                                      key=key_agent)
 
@@ -303,7 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
-    parser.add_argument('--bnn_steps', type=int, default=5_000)
+    parser.add_argument('--bnn_steps', type=int, default=32_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
