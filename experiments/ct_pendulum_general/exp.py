@@ -18,7 +18,7 @@ from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 from mbrl.model_based_agent.Smoother_Wrapper import Smoother_Wrapper
 
-from differentiators.nn_smoother.smoother_net import SmootherNet
+from diff_smoothers.smoother_net import SmootherNet
 
 log_wandb = False
 ENTITY = 'kiten'
@@ -202,7 +202,8 @@ def experiment(project_name: str = 'CT_Pendulum',
                               discount=jnp.array(discount_factor),
                               next_observation=jnp.ones(env.observation_size),
                               extras={'state_extras': {'t': jnp.array(0.0),
-                                                       'derivative': jnp.zeros(env.observation_size,)}},)
+                                                       'derivative': jnp.zeros(env.observation_size,),
+                                                       'true_derivative': jnp.zeros(env.observation_size,)}},)
 
     sac_buffer = UniformSamplingQueue(
         max_replay_size=max_replay_size_true_data_buffer,
