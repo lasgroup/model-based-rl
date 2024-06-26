@@ -54,7 +54,8 @@ class ContinuousPendulumEnv(Env):
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0),
-                     info={'t': jnp.array(0.0)})
+                     info={'t': jnp.array(0.0),
+                           'true_derivative': jnp.array([0.0, 0.0, 0.0])})
 
     def reward(self,
                x: Float[Array, 'observation_dim'],
@@ -106,6 +107,7 @@ class ContinuousPendulumEnv(Env):
 
         info = state.info
         info['t'] = info['t'] + self.dynamics_params.dt
+        info['true_derivative'] = dx
         state = state.replace(info=info)
 
         next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
