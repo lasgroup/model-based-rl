@@ -16,7 +16,7 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
-from mbrl.model_based_agent.Smoother_Wrapper import smoother_wrapper
+from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
 
 from diff_smoothers.smoother_net import SmootherNet
 
@@ -248,22 +248,26 @@ def experiment(project_name: str = 'CT_Pendulum',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
-    agent = agent_class(
-        env=env,
-        eval_env=env,
-        statistical_model=model,
-        optimizer=optimizer,
-        episode_length=horizon,
-        reward_model=PendulumReward(),
-        offline_data=offline_data,
-        num_envs=1,
-        num_eval_envs=1,
-        log_to_wandb=log_wandb,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-        first_episode_for_policy_training=first_episode_for_policy_training,
-        reset_statistical_model=reset_statistical_model,
-    )
-    wrapped_agent = smoother_wrapper(agent, smoother_model)
+    agent_kwargs = {
+        'env': env,
+        'eval_env': env,
+        'statistical_model': model,
+        'optimizer': optimizer,
+        'episode_length': horizon,
+        'reward_model': PendulumReward(),
+        'offline_data': offline_data,
+        'num_envs': 1,
+        'num_eval_envs': 1,
+        'log_to_wandb': log_wandb,
+        'deterministic_policy_for_data_collection': deterministic_policy_for_data_collection,
+        'first_episode_for_policy_training': first_episode_for_policy_training,
+        'reset_statistical_model': reset_statistical_model,
+    }
+
+    wrapped_agent = SmootherWrapper(agent_type=agent_class,
+                                     smoother_net=smoother_model,
+                                     state_data_source='smoother',
+                                     **agent_kwargs)
 
     agent_state = wrapped_agent.run_episodes(num_episodes=num_episodes,
                                      start_from_scratch=True,
