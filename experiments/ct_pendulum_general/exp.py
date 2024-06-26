@@ -16,11 +16,11 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
-from mbrl.model_based_agent.Smoother_Wrapper import Smoother_Wrapper
+from mbrl.model_based_agent.Smoother_Wrapper import smoother_wrapper
 
 from diff_smoothers.smoother_net import SmootherNet
 
-log_wandb = False
+log_wandb = True
 ENTITY = 'kiten'
 
 
@@ -63,7 +63,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
     offline_data = None
-    horizon = 200
+    horizon = 100
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -152,13 +152,13 @@ def experiment(project_name: str = 'CT_Pendulum',
                             logging_wandb=False,
                             beta=jnp.ones(shape=(env.observation_size,))*3,
                             num_particles=5,
-                            features=[64, 64],
-                            bnn_type=DeterministicFSVGDEnsemble,
+                            features=[128, 128, 128],
+                            bnn_type=ProbabilisticFSVGDEnsemble,
                             train_share=1.0,
-                            num_training_steps=1_000,
+                            num_training_steps=16_000,
                             weight_decay=1e-4,
                             return_best_model=True,
-                            eval_frequency=1000,
+                            eval_frequency=1_000,
                             )
 
     num_envs = 128
@@ -263,7 +263,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
     )
-    wrapped_agent = Smoother_Wrapper(agent, smoother_model)
+    wrapped_agent = smoother_wrapper(agent, smoother_model)
 
     agent_state = wrapped_agent.run_episodes(num_episodes=num_episodes,
                                      start_from_scratch=True,
