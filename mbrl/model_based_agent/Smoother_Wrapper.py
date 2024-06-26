@@ -1,12 +1,14 @@
 import jax.numpy as jnp
 import jax.random as jr
 from typing import Tuple
+import wandb
+
 from brax.training.types import Transition
 from brax.training.replay_buffers import UniformSamplingQueue
 
 from bsm.utils.normalization import Data
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
-from differentiators.nn_smoother import smoother_net
+from diff_smoothers.smoother_net import SmootherNet
 from .base_agent_wrapper import BaseAgentWrapper
 
 # This is a wrapper for model based agents
@@ -16,10 +18,10 @@ from .base_agent_wrapper import BaseAgentWrapper
 
 class Smoother_Wrapper(BaseAgentWrapper):
     def __init__(self,
-                 agent_class,
-                 smoother: smoother_net,
+                 agent,
+                 smoother: SmootherNet,
                  state_data_source: str = 'smoother'):
-        super().__init__(agent_class)
+        super().__init__(agent)
         self.smoother_model = smoother
         self.state_data_source = state_data_source
         self.agent.collected_data_buffer = self.prepare_data_buffers()
@@ -32,7 +34,8 @@ class Smoother_Wrapper(BaseAgentWrapper):
                                   discount=jnp.array(0.99),
                                   next_observation=jnp.zeros(self.env.observation_size,),
                                   extras={'state_extras': {'t': jnp.array(0.0),
-                                                           'derivative': jnp.zeros(self.env.observation_size,)}},
+                                                           'derivative': jnp.zeros(self.env.observation_size,),
+                                                           'true_derivative': jnp.zeros(self.env.observation_size,)}},
                                   )
         collected_data_buffer = UniformSamplingQueue(
             max_replay_size=self.max_collected_data_in_buffer,
@@ -79,6 +82,7 @@ class Smoother_Wrapper(BaseAgentWrapper):
         # Fit Smoother for each trajectory (or only on longest one)
         longest_trajectory = max(trajectories, key=lambda x: len(x.observation))
         inputs = longest_trajectory.extras['state_extras']['t'].reshape(-1, 1)
+        true_dx = longest_trajectory.extras['state_extras']['true_derivative'].reshape(-1, 1)
         outputs = longest_trajectory.observation
         data = Data(inputs, outputs)
 
@@ -86,6 +90,10 @@ class Smoother_Wrapper(BaseAgentWrapper):
         model_states = self.smoother_model.train_new_smoother(key, data)
         pred_x = self.smoother_model.predict_batch(inputs, model_states)
         ders = self.smoother_model.derivative_batch(inputs, model_states)
+
+        # Log the smoother performance to wandb as a plot
+        fig = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean)
+        wandb.log({'smoother/fit': wandb.Image(fig)})
 
         # Use the smoothed trajectory in the transitions
         if self.state_data_source == 'smoother':
