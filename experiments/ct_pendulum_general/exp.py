@@ -21,7 +21,7 @@ from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
 from diff_smoothers.smoother_net import SmootherNet
 
 log_wandb = True
-ENTITY = 'kiten'
+ENTITY = 'cbiel01'
 
 
 def experiment(project_name: str = 'CT_Pendulum',
