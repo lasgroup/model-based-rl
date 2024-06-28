@@ -59,10 +59,7 @@ class SmootherWrapper(BaseAgentWrapper):
                                                             actor=self.actor
                                                             )
         final_state, optimizer_state, transitions = interaction
-        dx, transitions = self._get_dx(key_smoother, transitions)
-        state_extras = transitions.extras
-        state_extras['state_extras']['derivative'] = dx
-        transitions = transitions._replace(extras=state_extras)
+        transitions = self._get_dx(key_smoother, transitions)
         collected_data_buffer_state = agent_state.optimizer_state.true_buffer_state
         collected_data_buffer_state = self.collected_data_buffer.insert(buffer_state=collected_data_buffer_state,
                                                                         samples=transitions)
@@ -118,7 +115,7 @@ class SmootherWrapper(BaseAgentWrapper):
     def _get_dx(self,
                key: jr.PRNGKey,
                transitions: Transition,
-               ) -> Tuple[jnp.ndarray, Transition]:
+               ) -> Transition:
         # Split transition into trajectories without resets (based on the time)
         timestamps = transitions.extras['state_extras']['t']
         indices = []
@@ -141,14 +138,19 @@ class SmootherWrapper(BaseAgentWrapper):
         # Log the smoother performance to wandb as a plot
         if self.log_to_wandb:
             fig, _ = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean)
-            wandb.log({'smoother/fit': wandb.Image(fig)})
+            wandb.log({'smoother/fit': fig})
 
         # Use the smoothed trajectory in the transitions
         if self.state_data_source == 'smoother':
             transition = longest_trajectory._replace(observation=pred_x.mean)
         else:
             transition = longest_trajectory
-        return ders.mean, transition
+
+        # Add the derivative to the transitions
+        state_extras = transition.extras
+        state_extras['state_extras']['derivative'] = ders.mean
+        transition = transition._replace(extras=state_extras)
+        return transition
 
     def _split_transitions(self,
                            transition: Transition,
