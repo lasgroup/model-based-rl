@@ -88,14 +88,14 @@ class SmootherWrapper(BaseAgentWrapper):
                                          log_data['x_dot_true'],
                                          state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$']
                                          )
-            wandb.log({'dynamics_model/data': fig})
+            wandb.log({'dynamics_model/data': wandb.Image(fig)})
             plt.close(fig)
             # Plot the training performance of the dynamics model
             inputs = data.inputs
             pred_dx = self.statistical_model.predict_batch(inputs, new_statistical_model_state)
             fig = plot_derivative_data(t=log_data['t'].reshape(-1, 1),
                                        x = data.inputs[:, :self.env.observation_size],
-                                       x_dot_true = data.outputs,
+                                       x_dot_true = log_data['x_dot_true'],
                                        x_dot_est=pred_dx.mean,
                                        x_dot_est_std=pred_dx.epistemic_std,
                                        source='Dyn. Model',
@@ -150,7 +150,7 @@ class SmootherWrapper(BaseAgentWrapper):
         if self.log_to_wandb:
             fig, _ = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean,
                                                   state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
-            wandb.log({'smoother/fit': fig})
+            wandb.log({'smoother/fit': wandb.Image(fig)})
             plt.close(fig)
 
         # Use the smoothed trajectory in the transitions
