@@ -6,6 +6,7 @@ import jax.random as jr
 import wandb
 from brax.training.replay_buffers import UniformSamplingQueue
 from brax.training.types import Transition
+from bsm.bayesian_regression.bayesian_neural_networks.deterministic_ensembles import DeterministicEnsemble
 from bsm.bayesian_regression import ProbabilisticEnsemble, DeterministicFSVGDEnsemble, ProbabilisticFSVGDEnsemble
 from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
 from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
@@ -43,27 +44,12 @@ def experiment(project_name: str = 'CT_Pendulum',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
-    config = dict(num_offline_samples=num_offline_samples,
-                  sac_horizon=sac_horizon,
-                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-                  seed=seed,
-                  num_episodes=num_episodes,
-                  sac_steps=sac_steps,
-                  bnn_steps=bnn_steps,
-                  first_episode_for_policy_training=first_episode_for_policy_training,
-                  exploration=exploration,
-                  reset_statistical_model=reset_statistical_model,
-                  regression_model=regression_model,
-                  beta=beta,
-                  weight_decay=weight_decay
-                  )
-
     env = ContinuousPendulumEnv(reward_source='dm-control')
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
     offline_data = None
-    horizon = 100
+    horizon = 128
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -152,8 +138,8 @@ def experiment(project_name: str = 'CT_Pendulum',
                             logging_wandb=False,
                             beta=jnp.ones(shape=(env.observation_size,))*3,
                             num_particles=5,
-                            features=[128, 128, 128],
-                            bnn_type=ProbabilisticFSVGDEnsemble,
+                            features=(64, 64),
+                            bnn_type=DeterministicEnsemble,
                             train_share=1.0,
                             num_training_steps=16_000,
                             weight_decay=1e-4,
@@ -213,10 +199,6 @@ def experiment(project_name: str = 'CT_Pendulum',
     optimizer = SACOptimizer(system=None,
                              true_buffer=sac_buffer,
                              **sac_kwargs)
-    if log_wandb:
-        wandb.init(project=project_name,
-                   dir='/cluster/scratch/' + ENTITY,
-                   config=config)
 
     agent_class = None
     if exploration == 'optimistic':
@@ -264,6 +246,29 @@ def experiment(project_name: str = 'CT_Pendulum',
         'reset_statistical_model': reset_statistical_model,
     }
 
+    config = dict(num_offline_samples=num_offline_samples,
+                  sample_horizon=horizon,
+                  sac_horizon=sac_horizon,
+                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  seed=seed,
+                  num_episodes=num_episodes,
+                  sac_steps=sac_steps,
+                  bnn_steps=bnn_steps,
+                  first_episode_for_policy_training=first_episode_for_policy_training,
+                  exploration=exploration,
+                  reset_statistical_model=reset_statistical_model,
+                  regression_model=regression_model,
+                  beta=beta,
+                  weight_decay=weight_decay,
+                  sac_kwargs=sac_kwargs,
+                  agent_kwargs=agent_kwargs,
+                  )
+    
+    if log_wandb:
+        wandb.init(project=project_name,
+                   dir='/cluster/scratch/' + ENTITY,
+                   config=config)
+
     base_agent = SmootherWrapper(agent_type=agent_class,
                                      smoother_net=smoother_model,
                                      state_data_source='smoother',
@@ -307,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='deterministic_FSVGD')
+    parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
 
