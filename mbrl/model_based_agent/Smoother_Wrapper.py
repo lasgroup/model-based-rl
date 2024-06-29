@@ -73,31 +73,37 @@ class SmootherWrapper(BaseAgentWrapper):
                                   collected_data_buffer_state: ReplayBufferState,
                                   key: chex.PRNGKey):
         # We prepare data to train from the collected_data_buffer
-        data = self._collected_buffer_to_train_data(collected_data_buffer_state)
+        data, log_data = self._collected_buffer_to_train_data(collected_data_buffer_state)
         if self.reset_statistical_model:
             statistical_model_state = self.statistical_model.init(key=key)
         new_statistical_model_state = self.statistical_model.update(
             stats_model_state=statistical_model_state,
             data=data)
         if self.log_to_wandb:
-            idx = jnp.arange(start=collected_data_buffer_state.sample_position, stop=collected_data_buffer_state.insert_position)
-            all_data = jnp.take(collected_data_buffer_state.data, idx, axis=0, mode='wrap')
-            all_transitions = self.collected_data_buffer._unflatten_fn(all_data)
-            obs = all_transitions.observation
-            actions = all_transitions.action
-            t = all_transitions.extras['state_extras']['t']
-            true_dx = all_transitions.extras['state_extras']['true_derivative']
+            # Plot the data the dynamics model was trained on
+            fig, _ = self.smoother_model.plot_fit(log_data['t'].reshape(-1, 1),
+                                         log_data['x'],
+                                         log_data['x'],
+                                         log_data['x_dot_est'],
+                                         log_data['x_dot_true'],
+                                         state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$']
+                                         )
+            wandb.log({'dynamics_model/data': fig})
+            plt.close(fig)
+            # Plot the training performance of the dynamics model
             inputs = data.inputs
             pred_dx = self.statistical_model.predict_batch(inputs, new_statistical_model_state)
-            fig = plot_derivative_data(t=t.reshape(-1,1),
-                                       x = obs,
-                                       x_dot_true=true_dx,
+            fig = plot_derivative_data(t=log_data['t'].reshape(-1, 1),
+                                       x = data.inputs[:, :self.env.observation_size],
+                                       x_dot_true = data.outputs,
                                        x_dot_est=pred_dx.mean,
                                        x_dot_est_std=pred_dx.epistemic_std,
                                        source='Dyn. Model',
                                        beta = pred_dx.statistical_model_state.beta,
+                                       state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
                                        )
             wandb.log({'dynamics_model/fit': wandb.Image(fig)})
+            plt.close(fig)
         return new_statistical_model_state
     
     def _collected_buffer_to_train_data(self,
@@ -108,9 +114,14 @@ class SmootherWrapper(BaseAgentWrapper):
         obs = all_transitions.observation
         actions = all_transitions.action
         inputs = jnp.concatenate([obs, actions], axis=-1)
-        next_obs = all_transitions.next_observation
         outputs = all_transitions.extras['state_extras']['derivative']
-        return Data(inputs=inputs, outputs=outputs)
+        log_data = {}
+        t = all_transitions.extras['state_extras']['t']
+        log_data['t'] = t
+        log_data['x'] = obs
+        log_data['x_dot_true'] = all_transitions.extras['state_extras']['true_derivative']
+        log_data['x_dot_est'] = outputs
+        return Data(inputs=inputs, outputs=outputs), log_data
 
     def _get_dx(self,
                key: jr.PRNGKey,
@@ -137,8 +148,10 @@ class SmootherWrapper(BaseAgentWrapper):
 
         # Log the smoother performance to wandb as a plot
         if self.log_to_wandb:
-            fig, _ = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean)
+            fig, _ = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean,
+                                                  state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
             wandb.log({'smoother/fit': fig})
+            plt.close(fig)
 
         # Use the smoothed trajectory in the transitions
         if self.state_data_source == 'smoother':
