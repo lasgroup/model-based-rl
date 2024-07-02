@@ -45,7 +45,8 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
         dynamics, system, actor = ExplorationDynamics, ExplorationSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
@@ -82,7 +83,8 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
             model = copy.deepcopy(self.statistical_model)
             dynamics = dynamics_type(statistical_model=model,
                                      x_dim=self.env.observation_size,
-                                     u_dim=self.env.action_size)
+                                     u_dim=self.env.action_size,
+                                     predict_difference=self.predict_difference)
             system = system_type(dynamics=dynamics,
                                  reward=reward_model, )
             actor = actor_type(env_observation_size=self.env.observation_size,
@@ -170,7 +172,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                                                         actor_state=opt_state)
                 metrics = {k + '_task_' + str(i): v for k, v in metrics.items()}
                 if self.log_to_wandb:
-                    wandb.log(metrics)
+                    wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
             print(f'End with evaluation of the policy')
@@ -205,7 +207,8 @@ class OptimisticActiveExplorationModelBasedAgent(PetsActiveExplorationModelBased
         dynamics, system, actor = OptimisticExplorationDynamics, OptimisticExplorationSystem, OptimisticActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
