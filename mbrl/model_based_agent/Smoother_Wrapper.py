@@ -15,6 +15,7 @@ from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
 from diff_smoothers.smoother_net import SmootherNet
 from diff_smoothers.data_functions.data_output import plot_derivative_data
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
+from mbrl.utils.brax_utils import EnvInteractor
 
 # What is unclean about this implementation?
 # The agent has its own agent attribute (so self.agent is an agent in and of itself...)
@@ -27,25 +28,21 @@ class SmootherWrapper(BaseAgentWrapper):
         super().__init__(agent_type, **kwargs)
         self.state_data_source = state_data_source
         self.smoother_model = smoother_net
-
-        self.collected_data_buffer = self.prepare_data_buffers()
-
-    # Override the prepare_data_buffers method to include the collected data buffer
-    def prepare_data_buffers(self) -> UniformSamplingQueue:
-        dummy_sample = Transition(observation=jnp.zeros(self.env.observation_size,),
-                                  action=jnp.zeros(self.env.action_size,),
-                                  reward=jnp.array(0.0),
-                                  discount=jnp.array(0.99),
-                                  next_observation=jnp.zeros(self.env.observation_size,),
-                                  extras={'state_extras': {'t': jnp.array(0.0),
-                                                           'derivative': jnp.zeros(self.env.observation_size,),
-                                                           'true_derivative': jnp.zeros(self.env.observation_size,)}},
-                                  )
-        collected_data_buffer = UniformSamplingQueue(
-            max_replay_size=self.max_collected_data_in_buffer,
-            dummy_data_sample=dummy_sample,
-            sample_batch_size=1)
-        return collected_data_buffer
+        
+        # Override the env_interactor so as not to try to pull true_derivatives from the environment
+        extra_fields = list(self.state_extras_ref.keys())
+        extra_fields.remove('true_derivative')
+        self.env_interactor = EnvInteractor(
+            env=self.env,
+            eval_env=self.eval_env,
+            num_envs=self.num_envs,
+            num_eval_envs=self.num_eval_envs,
+            episode_length=self.episode_length,
+            action_repeat=self.action_repeat,
+            key = self.env_interactor.evaluator._key,
+            deterministic_policy_for_data_collection=self.deterministic_policy_for_data_collection,
+            extra_fields=extra_fields,
+        )
 
     # Override the simulate_on_true_env method to include the smoother
     def simulate_on_true_env(self,
@@ -138,7 +135,7 @@ class SmootherWrapper(BaseAgentWrapper):
         # Fit Smoother for each trajectory (or only on longest one)
         longest_trajectory = max(trajectories, key=lambda x: len(x.observation))
         inputs = longest_trajectory.extras['state_extras']['t'].reshape(-1, 1)
-        true_dx = longest_trajectory.extras['state_extras']['true_derivative'].reshape(-1, self.env.observation_size)
+        true_dx = longest_trajectory.extras['state_extras']['derivative'].reshape(-1, self.env.observation_size)
         outputs = longest_trajectory.observation
         data = Data(inputs, outputs)
         # Get dx from Smoother
@@ -155,14 +152,29 @@ class SmootherWrapper(BaseAgentWrapper):
 
         # Use the smoothed trajectory in the transitions
         if self.state_data_source == 'smoother':
-            transition = longest_trajectory._replace(observation=pred_x.mean)
+            transition = Transition(
+                observation=pred_x.mean,
+                action=longest_trajectory.action,
+                reward=longest_trajectory.reward,
+                discount=longest_trajectory.discount,
+                next_observation=longest_trajectory.next_observation,
+                extras={'state_extras': {'t': longest_trajectory.extras['state_extras']['t'],
+                                         'true_derivative': longest_trajectory.extras['state_extras']['derivative'],
+                                         'derivative': ders.mean,
+                                         'dt': longest_trajectory.extras['state_extras']['dt']}}
+            )
         else:
-            transition = longest_trajectory
-
-        # Add the derivative to the transitions
-        state_extras = transition.extras
-        state_extras['state_extras']['derivative'] = ders.mean
-        transition = transition._replace(extras=state_extras)
+            transition = Transition(
+                observation=longest_trajectory.observation,
+                action=longest_trajectory.action,
+                reward=longest_trajectory.reward,
+                discount=longest_trajectory.discount,
+                next_observation=longest_trajectory.next_observation,
+                extras={'state_extras': {'t': longest_trajectory.extras['state_extras']['t'],
+                                         'true_derivative': longest_trajectory.extras['state_extras']['derivative'],
+                                         'derivative': ders.mean,
+                                         'dt': longest_trajectory.extras['state_extras']['dt']}}
+            )
         return transition
 
     def _split_transitions(self,

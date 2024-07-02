@@ -1,4 +1,5 @@
 from .base_model_based_agent import BaseModelBasedAgent
+from .continuous_base_model_based_agent import ContinuousBaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor
 from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics, ContinuousOptimisticSystem, ContinuousOptimisticDynamics
@@ -25,7 +26,7 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
         return actor
     
 
-class ContinuousOptimisticModelBasedAgent(BaseModelBasedAgent):
+class ContinuousOptimisticModelBasedAgent(ContinuousBaseModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -35,7 +36,9 @@ class ContinuousOptimisticModelBasedAgent(BaseModelBasedAgent):
         dynamics, system, actor = ContinuousOptimisticDynamics, ContinuousOptimisticSystem, OptimisticActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size)
+                            u_dim=self.env.action_size,
+                            predict_difference = self.predict_difference,
+                            dt = self.dt)
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,

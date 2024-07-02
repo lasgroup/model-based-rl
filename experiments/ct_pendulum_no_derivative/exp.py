@@ -182,14 +182,17 @@ def experiment(project_name: str = 'CT_Pendulum',
     }
 
     max_replay_size_true_data_buffer = 10 ** 4
+
+    extra_fields = ('derivative', 'true_derivative', 't', 'dt')
+    extra_fields_shape = (env.observation_size,) * 2 + (1,) * 2
+    state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
+
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
                               action=jnp.zeros(shape=(env.action_size,)),
                               reward=jnp.array(0.0),
                               discount=jnp.array(discount_factor),
                               next_observation=jnp.ones(env.observation_size),
-                              extras={'state_extras': {'t': jnp.array(0.0),
-                                                       'derivative': jnp.zeros(env.observation_size,),
-                                                       'true_derivative': jnp.zeros(env.observation_size,)}},)
+                              extras={'state_extras': state_extras})
 
     sac_buffer = UniformSamplingQueue(
         max_replay_size=max_replay_size_true_data_buffer,
@@ -243,7 +246,10 @@ def experiment(project_name: str = 'CT_Pendulum',
         'log_to_wandb': log_wandb,
         'deterministic_policy_for_data_collection': deterministic_policy_for_data_collection,
         'first_episode_for_policy_training': first_episode_for_policy_training,
+        'predict_difference': False,
         'reset_statistical_model': reset_statistical_model,
+        'dt': env.dt,
+        'state_extras_ref': state_extras,
     }
 
     config = dict(num_offline_samples=num_offline_samples,
@@ -270,14 +276,13 @@ def experiment(project_name: str = 'CT_Pendulum',
                    config=config)
 
     base_agent = SmootherWrapper(agent_type=agent_class,
-                                     smoother_net=smoother_model,
-                                     state_data_source='smoother',
-                                     **agent_kwargs)
+                                 smoother_net=smoother_model,
+                                 state_data_source='smoother',
+                                 **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
-                                     start_from_scratch=True,
-                                     key=key_agent)
-
+                                          start_from_scratch=True,
+                                          key=key_agent)
     wandb.finish()
 
 

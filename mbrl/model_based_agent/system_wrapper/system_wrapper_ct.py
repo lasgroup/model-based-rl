@@ -27,11 +27,13 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
                  statistical_model: StatisticalModel,
                  aleatoric_noise_in_prediction: bool = True,
                  predict_difference: bool = False,
+                 dt: float = 0.05,
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.statistical_model = statistical_model
         self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
         self.predict_difference = predict_difference
+        self.dt = dt
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
         return DynamicsParams(
@@ -61,18 +63,17 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
             delta_x = delta_x_dist.sample(seed=key_sample_x_next)
             x_next = x + delta_x
         else:
-            dt = 0.05
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std
             dx_dist = Normal(loc=model_output.mean, scale=scale_std)
             dx_next = dx_dist.sample(seed=key_sample_x_next)
-            x_next = x + dx_next * dt
+            x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
-        aleatoric_std = model_output.aleatoric_std
+        aleatoric_std = model_output.aleatoric_std * self.dt
         if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
         return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
@@ -104,13 +105,12 @@ class ContinuousOptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
             delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
             x_next = x + delta_x
         else:
-            dt = 0.05
             dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + dx_next*dt
+            x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
-        aleatoric_std = model_output.aleatoric_std
-        if self.aleatoric_noise_in_prediction:
+        aleatoric_std = model_output.aleatoric_std * self.dt
+        if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
@@ -122,6 +122,7 @@ class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         super().__init__(*args, **kwargs)
         self.use_log = use_log
         self.scale_with_aleatoric_std = scale_with_aleatoric_std
+        raise NotImplementedError
 
     def get_intrinsic_reward(self, epistemic_std: chex.Array, aleatoric_std: chex.Array) -> chex.Array:
         if self.scale_with_aleatoric_std:
@@ -177,7 +178,8 @@ class OptimisticExplorationDynamics(ExplorationDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u_dim = self.x_dim + self.u_dim
-
+        raise NotImplementedError
+    
     def next_state(self,
                    x: chex.Array,
                    u: chex.Array,

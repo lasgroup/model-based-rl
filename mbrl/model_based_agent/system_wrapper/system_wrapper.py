@@ -19,11 +19,6 @@ class DynamicsParams(Generic[ModelState, DummyDynamicsParams]):
     key: chex.PRNGKey
     statistical_model_state: StatisticalModelState[ModelState]
 
-class ContinuousPetsDynamics:
-    pass
-
-class ContinuousPetsSystem:
-    pass
 
 class PetsDynamics(Dynamics, Generic[ModelState]):
     def __init__(self,

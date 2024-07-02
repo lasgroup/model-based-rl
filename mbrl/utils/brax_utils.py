@@ -31,10 +31,7 @@ def env_step(
     """
     action, new_actor_state = actor.act(env_state.obs, opt_state=actor_state, evaluate=evaluate)
     next_env_state = env.step(env_state, action)
-    state_extras = {}
-    state_extras['true_derivative'] = next_env_state.info['true_derivative']
-    state_extras['t'] = env_state.info['t']
-    # state_extras = {x: next_env_state.info[x] for x in extra_fields}
+    state_extras = {x: next_env_state.info[x] for x in extra_fields}
     return next_env_state, new_actor_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=action,
@@ -50,7 +47,7 @@ def generate_unroll(
         actor: Actor,
         actor_state: OptimizerState,
         unroll_length: int,
-        extra_fields: Sequence[str] = ('t', 'true_derivative'),
+        extra_fields: Sequence[str] = (),
         evaluate: bool = False,
 ) -> Tuple[State, OptimizerState, Transition]:
     """Collect trajectories of given unroll_length."""
@@ -156,6 +153,7 @@ class EnvInteractor:
                  num_eval_envs: int = 128,
                  deterministic_policy_for_data_collection: bool = True,
                  eval_env: BraxEnv | None = None,
+                 extra_fields: Sequence[str] = (),
                  ):
         self.episode_length = episode_length
         self.action_repeat = action_repeat
@@ -168,6 +166,7 @@ class EnvInteractor:
             episode_length=self.episode_length,
             action_repeat=self.action_repeat,
         )
+        self.extra_fields = extra_fields
 
         if not eval_env:
             eval_env = env
@@ -192,7 +191,7 @@ class EnvInteractor:
                            ) -> Tuple[State, OptimizerState, Transition]:
         env_state, new_opt_state, transitions = env_step(
             self.env, env_state, actor, opt_state,
-            extra_fields=('t', 'true_derivative'),
+            extra_fields=self.extra_fields,
             evaluate=self.deterministic_policy_for_data_collection)
         return env_state, new_opt_state, transitions
 
