@@ -33,12 +33,18 @@ def experiment(project_name: str = 'CT_Pendulum',
                num_episodes: int = 20,
                sac_steps: int = 1_000_000,
                bnn_steps: int = 5_000,
+               bnn_features: tuple = (256,) * 2,
+               bnn_train_share: float = 0.8,
+               bnn_weight_decay: float = 1e-4,
                first_episode_for_policy_training: int = -1,
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
                beta: float = 2.0,
-               weight_decay: float = 0.0
+               smoother_steps: int = 16_000,
+               smoother_features: tuple = (64, 64),
+               smoother_train_share: float = 1.0,
+               smoother_weight_decay: float = 1e-4,
                ):
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -58,15 +64,15 @@ def experiment(project_name: str = 'CT_Pendulum',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
-            features=(256,) * 2,
+            features=bnn_features,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=bnn_train_share,
             eval_frequency=5_000,
-            weight_decay=weight_decay,
+            weight_decay=bnn_weight_decay,
         )
     elif regression_model == 'deterministic_ensemble':
         model = BNNStatisticalModel(
@@ -75,14 +81,14 @@ def experiment(project_name: str = 'CT_Pendulum',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
-            features=(256,) * 2,
+            features=bnn_features,
             num_particles=10,
             logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=bnn_train_share,
             eval_frequency=5_000,
-            weight_decay=weight_decay,
+            weight_decay=bnn_weight_decay,
         )
     elif regression_model == 'deterministic_FSVGD':
         # For optimistic case: Tune beta and stuff
@@ -92,15 +98,15 @@ def experiment(project_name: str = 'CT_Pendulum',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=bnn_features,
             bnn_type=DeterministicFSVGDEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=bnn_train_share,
             eval_frequency=5_000,
-            weight_decay=weight_decay,
+            weight_decay=bnn_weight_decay,
         )
     elif regression_model == 'probabilistic_FSVGD':
         # For optimistic case: Tune beta and stuff
@@ -110,15 +116,15 @@ def experiment(project_name: str = 'CT_Pendulum',
             num_training_steps=bnn_steps,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=bnn_features,
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
-            train_share=0.8,
+            train_share=bnn_train_share,
             eval_frequency=5_000,
-            weight_decay=weight_decay,
+            weight_decay=bnn_weight_decay,
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
@@ -138,11 +144,11 @@ def experiment(project_name: str = 'CT_Pendulum',
                             logging_wandb=False,
                             beta=jnp.ones(shape=(env.observation_size,))*3,
                             num_particles=5,
-                            features=(64, 64),
+                            features=smoother_features,
                             bnn_type=DeterministicEnsemble,
-                            train_share=1.0,
-                            num_training_steps=16_000,
-                            weight_decay=1e-4,
+                            train_share=smoother_train_share,
+                            num_training_steps=smoother_steps,
+                            weight_decay=smoother_weight_decay,
                             return_best_model=True,
                             eval_frequency=1_000,
                             )
@@ -260,12 +266,18 @@ def experiment(project_name: str = 'CT_Pendulum',
                   num_episodes=num_episodes,
                   sac_steps=sac_steps,
                   bnn_steps=bnn_steps,
+                  bnn_features=bnn_features,
+                  bnn_train_share=bnn_train_share,
+                  bnn_weight_decay=bnn_weight_decay,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
                   beta=beta,
-                  weight_decay=weight_decay,
+                  smoother_steps=smoother_steps,
+                  smoother_features=smoother_features,
+                  smoother_train_share=smoother_train_share,
+                  smoother_weight_decay=smoother_weight_decay,
                   sac_kwargs=sac_kwargs,
                   agent_kwargs=agent_kwargs,
                   )
@@ -295,12 +307,18 @@ def main(args):
                num_episodes=args.num_episodes,
                sac_steps=args.sac_steps,
                bnn_steps=args.bnn_steps,
+               bnn_features=args.bnn_features,
+               bnn_train_share=args.bnn_train_share,
+               bnn_weight_decay=args.bnn_weight_decay,
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
                beta=args.beta,
-               weight_decay=args.weight_decay
+               smoother_steps=args.smoother_steps,
+               smoother_features=args.smoother_features,
+               smoother_train_share=args.smoother_train_share,
+               smoother_weight_decay=args.smoother_weight_decay,
                )
 
 
@@ -314,13 +332,18 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=32_000)
+    parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
+    parser.add_argument('--bnn_train_share', type=float, default=0.8)
+    parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--weight_decay', type=float, default=0.0)
-
+    parser.add_argument('--smoother_steps', type=int, default=16_000)
+    parser.add_argument('--smoother_features', type=tuple, default=(64, 64))
+    parser.add_argument('--smoother_train_share', type=float, default=1.0)
+    parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
 
     args = parser.parse_args()
     main(args)
