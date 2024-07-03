@@ -1,4 +1,4 @@
-import experiments.ct_pendulum_no_derivative.exp as exp
+import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
