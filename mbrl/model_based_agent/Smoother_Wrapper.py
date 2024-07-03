@@ -13,7 +13,7 @@ from bsm.utils.normalization import Data
 from bsm.utils import StatisticalModelState
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
 from diff_smoothers.smoother_net import SmootherNet
-from diff_smoothers.data_functions.data_output import plot_derivative_data
+from diff_smoothers.data_functions.data_output import plot_derivative_data, plot_data
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
 from mbrl.utils.brax_utils import EnvInteractor
 
@@ -78,13 +78,11 @@ class SmootherWrapper(BaseAgentWrapper):
             data=data)
         if self.log_to_wandb:
             # Plot the data the dynamics model was trained on
-            fig, _ = self.smoother_model.plot_fit(log_data['t'].reshape(-1, 1),
-                                         log_data['x'],
-                                         log_data['x'],
-                                         log_data['x_dot_est'],
-                                         log_data['x_dot_true'],
-                                         state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$']
-                                         )
+            fig = plot_data(t=log_data['t'].reshape(-1, 1),
+                               x=log_data['x'],
+                               u=log_data['u'],
+                               x_dot=log_data['x_dot_est'],
+                               title='Data used for training the dynamics model')
             wandb.log({'dynamics_model/data': wandb.Image(fig)})
             plt.close(fig)
             # Plot the training performance of the dynamics model
@@ -118,6 +116,7 @@ class SmootherWrapper(BaseAgentWrapper):
         log_data['x'] = obs
         log_data['x_dot_true'] = all_transitions.extras['state_extras']['true_derivative']
         log_data['x_dot_est'] = outputs
+        log_data['u'] = actions
         return Data(inputs=inputs, outputs=outputs), log_data
 
     def _get_dx(self,
