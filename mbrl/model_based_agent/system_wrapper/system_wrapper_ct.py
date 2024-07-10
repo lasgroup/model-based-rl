@@ -25,7 +25,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
                  x_dim: int,
                  u_dim: int,
                  statistical_model: StatisticalModel,
-                 aleatoric_noise_in_prediction: bool = True,
+                 aleatoric_noise_in_prediction: bool = False,
                  predict_difference: bool = False,
                  dt: float = 0.05,
                  ):
