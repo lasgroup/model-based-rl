@@ -94,6 +94,7 @@ class SmootherWrapper(BaseAgentWrapper):
                                        x_dot_est=pred_dx.mean,
                                        x_dot_est_std=pred_dx.epistemic_std,
                                        source='Dyn. Model',
+                                       x_dot_smoother=log_data['x_dot_est'],
                                        beta = pred_dx.statistical_model_state.beta,
                                        state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
                                        )
