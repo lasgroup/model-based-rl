@@ -31,7 +31,11 @@ def env_step(
     """
     action, new_actor_state = actor.act(env_state.obs, opt_state=actor_state, evaluate=evaluate)
     next_env_state = env.step(env_state, action)
-    state_extras = {x: next_env_state.info[x] for x in extra_fields}
+    state_extras = {x: next_env_state.info[x] for x in extra_fields} #t, dt, derivative
+    #state_extras = {}
+    #state_extras['derivative'] = next_env_state.info['derivative']
+    #state_extras['dt'] = env_state.info['dt']
+    state_extras['t'] = env_state.info['t']
     return next_env_state, new_actor_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=action,
