@@ -21,7 +21,8 @@ from mbpo.utils.type_aliases import OptimizerState
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor
 from mbrl.utils.brax_utils import EnvInteractor
-
+from diff_smoothers.data_functions.data_output import plot_prediction_data
+from matplotlib import pyplot as plt
 
 @chex.dataclass
 class ModelBasedAgentState:
@@ -242,9 +243,30 @@ class BaseModelBasedAgent(ABC):
             wandb.save(model_path, wandb.run.dir)
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
-        metrics = self.env_interactor.run_evaluation(actor=self.actor,
+        metrics, data = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
         if self.log_to_wandb:
+            # Check what the dynamics model is predicting
+            x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
+            x_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
+            input1 = jnp.concatenate([data.observation[0,:], data.action[0,:]], axis=-1)
+            x_dot_est = x_dot_est.at[0,:].set(self.statistical_model.predict_batch(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state).mean.squeeze())
+            x_est = x_est.at[0,:].set(data.observation[0,:].squeeze())
+            for i in range(1, len(data.extras['state_extras']['t'])):
+                new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dt
+                x_est = x_est.at[i,:].set(new_x_est.squeeze())
+                x_dot_est = x_dot_est.at[i,:].set(self.statistical_model.predict_batch(jnp.concatenate([x_est[i,:].reshape(1, -1), data.action[i,:]],axis=-1),
+                                                                agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state).mean.squeeze())
+            # Plot the predicted and true dynamics
+            fig = plot_prediction_data(t=data.extras['state_extras']['t'].reshape(-1,1),
+                                       x_true=data.observation.reshape(-1, data.observation.shape[-1]),
+                                       x_est=x_est,
+                                       x_est_std=jnp.zeros_like(x_est),
+                                       beta=jnp.zeros((data.observation.shape[-1])),
+                                       source='dyn.model')
+            wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
+            plt.close(fig)
+
             wandb.log(metrics | {'episode_idx': episode_idx})
         else:
             print(metrics)
