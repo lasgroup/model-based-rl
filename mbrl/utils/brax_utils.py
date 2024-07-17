@@ -1,7 +1,8 @@
 import time
 from functools import partial
 from typing import Sequence, Tuple
-
+import wandb
+import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -95,21 +96,21 @@ class Evaluator:
         self.episode_length = episode_length
         self._steps_per_unroll = episode_length * num_eval_envs
 
-    @partial(jax.jit, static_argnums=(0, 2))
+    # @partial(jax.jit, static_argnums=(0, 2))
     def generate_eval_unroll(self,
                              opt_state: OptimizerState,
                              actor: Actor,
                              rng: jax.random.PRNGKey) -> State:
         reset_keys = jax.random.split(rng, self.num_eval_envs)
         eval_first_state = self.eval_env.reset(reset_keys)
-        state = generate_unroll(
+        state, _ , data = generate_unroll(
             env=self.eval_env,
             env_state=eval_first_state,
             actor=actor,
             actor_state=opt_state,
             unroll_length=self.episode_length // self.action_repeat,
-            evaluate=True)[0]
-        return state
+            evaluate=True)
+        return state, data
 
     def run_evaluation(self,
                        actor_state: OptimizerState,
@@ -120,7 +121,7 @@ class Evaluator:
         eval_opt_state = actor_state.replace(key=opt_key)
 
         t = time.time()
-        eval_state = self.generate_eval_unroll(eval_opt_state, actor, unroll_key)
+        eval_state, data = self.generate_eval_unroll(eval_opt_state, actor, unroll_key)
         eval_metrics = eval_state.info['eval_metrics']
         eval_metrics.active_episodes.block_until_ready()
         epoch_eval_time = time.time() - t
@@ -144,7 +145,7 @@ class Evaluator:
             **metrics
         }
 
-        return metrics  # pytype: disable=bad-return-type  # jax-ndarray
+        return metrics, data  # pytype: disable=bad-return-type  # jax-ndarray
 
 
 class EnvInteractor:
