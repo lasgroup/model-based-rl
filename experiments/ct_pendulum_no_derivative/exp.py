@@ -328,13 +328,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='CT_Pendulum_TimeDelay')
+    parser.add_argument('--project_name', type=str, default='CT_Pendulum')
     parser.add_argument('--num_offline_samples', type=int, default=200)
     parser.add_argument('--sac_horizon', type=int, default=128)
-    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
+    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=10)
-    parser.add_argument('--sac_steps', type=int, default=100_000)
+    parser.add_argument('--num_episodes', type=int, default=30)
+    parser.add_argument('--sac_steps', type=int, default=500_000)
     parser.add_argument('--bnn_steps', type=int, default=32_000)
     parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
@@ -347,8 +347,8 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_steps', type=int, default=16_000)
     parser.add_argument('--smoother_features', type=tuple, default=(64, 64))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
-    parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
-    parser.add_argument('--log_wandb', type=int, default=1)
+    parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
+    parser.add_argument('--log_wandb', type=int, default=0)
 
     args = parser.parse_args()
     main(args)
