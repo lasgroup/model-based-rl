@@ -145,7 +145,11 @@ class SmootherWrapper(BaseAgentWrapper):
 
         # Log the smoother performance to wandb as a plot
         if self.log_to_wandb:
-            fig, _ = self.smoother_model.plot_fit(inputs, pred_x.mean, outputs, true_dx, ders.mean,
+            fig, _ = self.smoother_model.plot_fit(inputs=inputs,
+                                                  pred_x=pred_x.mean,
+                                                  true_x=outputs,
+                                                  pred_x_dot=ders.mean,
+                                                  true_x_dot=true_dx,
                                                   state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
             wandb.log({'smoother/fit': wandb.Image(fig)})
             plt.close(fig)
