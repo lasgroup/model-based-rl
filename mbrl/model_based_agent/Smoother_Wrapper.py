@@ -96,6 +96,7 @@ class SmootherWrapper(BaseAgentWrapper):
                                        source='Dyn. Model',
                                        x_dot_smoother=log_data['x_dot_est'],
                                        beta = pred_dx.statistical_model_state.beta,
+                                       num_trajectory_to_plot=-1,
                                        state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
                                        )
             wandb.log({'dynamics_model/fit': wandb.Image(fig)})
