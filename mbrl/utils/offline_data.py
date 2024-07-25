@@ -3,14 +3,23 @@ from abc import ABC, abstractmethod
 import chex
 import jax.numpy as jnp
 import jax.random as jr
-from brax.envs import Env, State
+from brax import base
+from brax.envs.base import Env, State
 from jaxtyping import Float, Array
 from brax.training.types import Transition
+import jax
 from jax import vmap
 
 from mbrl.envs.pendulum import PendulumEnv
+from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost, AugmentedPipelineState
 
+from diff_smoothers.smoother_net import SmootherNet
+from diff_smoothers.data_functions.data_creation import create_random_control_sequence
+from diff_smoothers.data_functions.data_output import plot_data
+from bsm.utils.normalization import Data
+import matplotlib.pyplot as plt
+import os
 
 class OfflineData(ABC):
 
@@ -52,10 +61,12 @@ class OfflineData(ABC):
         states = self.sample_states(key=key, num_samples=num_samples)
         actions = self.sample_actions(key=key, num_samples=num_samples)
 
+        first_info: dict = {'t': jnp.zeros(shape=(num_samples,)),}
         brax_state = State(pipeline_state=jnp.zeros(shape=(num_samples,)),
                            obs=states,
                            reward=jnp.zeros(shape=(num_samples,)),
-                           done=jnp.zeros(shape=(num_samples,)))
+                           done=jnp.zeros(shape=(num_samples,)),
+                           info=first_info)
 
         next_states = vmap(self.env.step)(brax_state, actions)
         transitions = Transition(observation=brax_state.obs,
@@ -86,6 +97,107 @@ class PendulumOfflineData(OfflineData):
                         num_samples: int) -> Float[Array, 'dim_batch dim_action']:
         actions = jr.uniform(key, shape=(num_samples, 1), minval=-1, maxval=1)
         return actions
+
+class SmootherPendulumOfflineData(OfflineData):
+
+    def __init__(self,
+                 smoother_net: SmootherNet,
+                 state_data_source: str = 'smoother'):
+        super().__init__(env=ContinuousPendulumEnv(reward_source='dm-control'))
+        self.smoother_net = smoother_net
+        self.state_data_source = state_data_source
+
+    def _sample_states(self,
+                       key: chex.PRNGKey,
+                       num_samples: int) -> Float[Array, 'dim_batch dim_state']:
+        key_angle, key_angular_velocity = jr.split(key)
+        angles = jr.uniform(key_angle, shape=(num_samples,), minval=-jnp.pi, maxval=jnp.pi)
+        cos, sin = jnp.cos(angles), jnp.sin(angles)
+        angular_velocity = jr.uniform(key_angular_velocity, shape=(num_samples,), minval=-10, maxval=10)
+        return jnp.stack([cos, sin, angular_velocity], axis=-1)
+
+    def _sample_actions(self,
+                        key: chex.PRNGKey,
+                        num_samples: int) -> Float[Array, 'dim_batch dim_action']:
+        actions = jr.uniform(key, shape=(num_samples, 1), minval=-1, maxval=1)
+        return actions
+    
+    def _sample_colored_actions(self, num_trajectories: int, num_points: int,
+                                key: jr.PRNGKey, col_noise_exponent: float = 3) -> Array:
+        return create_random_control_sequence(num_points=num_points,
+                                              key=key, control_dim=num_trajectories,
+                                              col_noise_exponent=col_noise_exponent)
+    
+    def sample_transitions(self, key: Array, num_samples: int,
+                           trajectory_length: int, plot_results: bool = False) -> Transition:
+        num_trajectories = num_samples // trajectory_length
+        key_states, key_actions = jr.split(key, 2)
+        init_states = self._sample_states(key_states, num_trajectories)
+        colored_actions = self._sample_colored_actions(num_trajectories, trajectory_length, key_actions).T
+        # Scale the actions to -1 and 1
+        colored_actions = 2 * (colored_actions - colored_actions.min()) / (colored_actions.max() - colored_actions.min()) - 1
+        def run_full_sim(init_state, colored_action):
+            first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
+                            't': jnp.array(0.0),
+                            'dt': jnp.array(self.env.dynamics_params.dt)}
+            brax_state = State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
+                     obs=init_state,
+                     reward=jnp.array(0.0),
+                     done=jnp.array(0.0),
+                     info=first_info)
+            def f(carry, xs):
+                next_state = self.env.step(carry, xs)
+                return next_state, next_state
+            _, next_states = jax.lax.scan(f, brax_state, colored_action.reshape(-1, self.env.action_size))
+            return next_states
+        next_states = vmap(run_full_sim, in_axes=(0,0))(init_states, colored_actions)
+        states = jnp.concatenate([init_states.reshape(num_trajectories, 1, -1), next_states.obs[:,:-1,:]], axis=1)
+
+        # Fit the smoothers
+        if plot_results:
+            fig = plot_data(t=jnp.tile(jnp.arange(0, 0 + 0.05*trajectory_length, 0.05), (num_trajectories, 1)).reshape(num_trajectories, -1, 1),
+                            x=states,
+                            u=colored_actions.reshape(num_trajectories, -1, 1),
+                            x_dot=next_states.info['derivative'],
+                            title='Offline Data')
+            if not os.path.exists('./results/offline_data'):
+                os.makedirs('./results/offline_data')
+            plt.savefig('./results/offline_data/colored_data.png')
+            plt.close(fig)
+        smoother_keys = jr.split(key, num_trajectories)
+        smoothed_state = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
+        smoothed_derivative = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
+        for k01 in range(num_trajectories):
+            data = Data(inputs=jnp.arange(0, 0 + 0.05*trajectory_length, 0.05).reshape(-1,1), outputs=states[k01,:,:])
+            model_states = self.smoother_net.train_new_smoother(smoother_keys[k01], data=data)
+            pred_x = self.smoother_net.predict_batch(data.inputs, model_states)
+            pred_x_dot = self.smoother_net.derivative_batch(data.inputs, model_states)
+            smoothed_state = smoothed_state.at[k01, :, :].set(pred_x.mean)
+            smoothed_derivative = smoothed_derivative.at[k01, :, :].set(pred_x_dot.mean)
+            if plot_results:
+                fig, _ = self.smoother_net.plot_fit(inputs=data.inputs,
+                                                  pred_x=pred_x.mean,
+                                                  true_x=data.outputs,
+                                                  pred_x_dot=pred_x_dot.mean,
+                                                  true_x_dot=next_states.info['derivative'][k01,:,:],
+                                                  state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
+                if not os.path.exists('./results/offline_data'):
+                    os.makedirs('./results/offline_data')
+                plt.savefig(f'./results/offline_data/trajectory_{k01}.png')
+                plt.close(fig)
+        transitions = Transition(observation=smoothed_state.reshape(num_trajectories*trajectory_length, -1),
+                          action=colored_actions.reshape(num_trajectories*trajectory_length, -1),
+                          reward=next_states.reward.reshape(num_trajectories*trajectory_length, -1),
+                          discount=jnp.zeros(shape=(num_trajectories*trajectory_length,)),
+                          next_observation=next_states.obs.reshape(num_trajectories*trajectory_length, -1),
+                          extras={'state_extras': {'t': jnp.tile(jnp.arange(0, 0 + 0.05*trajectory_length, 0.05), (num_trajectories, 1)).reshape(num_trajectories*trajectory_length, 1),
+                                                   'derivative': smoothed_derivative.reshape(num_trajectories*trajectory_length, -1),
+                                                   'dt': jnp.ones((num_trajectories*trajectory_length, 1)) * self.env.dynamics_params.dt,
+                                                   'true_derivative': next_states.info['derivative'].reshape(num_trajectories*trajectory_length, -1)}})
+        return transitions
+
+
+        
 
 
 class WhenToControlWrapper(OfflineData):
