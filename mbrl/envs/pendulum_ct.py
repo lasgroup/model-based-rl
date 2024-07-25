@@ -50,7 +50,7 @@ class ContinuousPendulumEnv(Env):
                                                 sigmoid='long_tail')
 
     def reset(self,
-              rng: jax.Array) -> State:
+              rng: jax.Array | None = None) -> State:
         first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
                             'dt': jnp.array(self.dynamics_params.dt)}
