@@ -1,5 +1,6 @@
 import argparse
-
+import os
+os.environ['JAX_PLATFORMS'] = 'cpu'
 import chex
 import jax
 import jax.numpy as jnp
@@ -19,7 +20,7 @@ from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
-
+from mbrl.utils.offline_data import SmootherPendulumOfflineData
 from diff_smoothers.smoother_net import SmootherNet
 
 jax.config.update("jax_debug_nans", True)
@@ -28,8 +29,9 @@ ENTITY = 'cbiel01'
 
 
 def experiment(project_name: str = 'CT_Pendulum',
-               num_offline_samples: int = 100,
+               num_offline_samples: int = 0,
                sac_horizon: int = 100,
+               num_online_samples: int = 100,
                deterministic_policy_for_data_collection: bool = False,
                seed: int = 42,
                num_episodes: int = 20,
@@ -54,11 +56,6 @@ def experiment(project_name: str = 'CT_Pendulum',
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
     env = ContinuousPendulumEnv(reward_source='dm-control')
-
-    key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
-
-    offline_data = None
-    horizon = 128
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -156,7 +153,16 @@ def experiment(project_name: str = 'CT_Pendulum',
                             eval_frequency=1_000,
                             )
 
-    num_envs = 128
+    offline_data_gen = SmootherPendulumOfflineData(smoother_net=smoother_model)
+    key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
+    if num_offline_samples > 0:
+        offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
+                                                           num_samples=num_offline_samples,
+                                                           trajectory_length=sac_horizon)
+    else:
+        offline_data = None
+
+    num_envs = 64
     num_env_steps_between_updates = 20
     sac_kwargs = {
         'num_timesteps': sac_steps,
@@ -172,19 +178,19 @@ def experiment(project_name: str = 'CT_Pendulum',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 64,
+        'batch_size': 32,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
-        'max_replay_size': sac_steps,
+        'max_replay_size': 10 ** 5,
         'grad_updates_per_step': num_envs * num_env_steps_between_updates,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (64,) * 3,
+        'policy_hidden_layer_sizes': (32,) * 5,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (64,) * 3,
+        'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
         'wandb_logging': log_wandb,
         'return_best_model': True,
@@ -247,7 +253,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         'eval_env': env,
         'statistical_model': model,
         'optimizer': optimizer,
-        'episode_length': horizon,
+        'episode_length': num_online_samples,
         'reward_model': PendulumReward(),
         'offline_data': offline_data,
         'num_envs': 1,
@@ -262,7 +268,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     }
 
     config = dict(num_offline_samples=num_offline_samples,
-                  sample_horizon=horizon,
+                  sample_horizon=num_online_samples,
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   seed=seed,
@@ -305,6 +311,7 @@ def main(args):
     experiment(project_name=args.project_name,
                num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
+               num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                seed=args.seed,
                num_episodes=args.num_episodes,
@@ -329,21 +336,22 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='CT_Pendulum')
-    parser.add_argument('--num_offline_samples', type=int, default=50_000)
-    parser.add_argument('--sac_horizon', type=int, default=32)
-    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
+    parser.add_argument('--num_offline_samples', type=int, default=1024)
+    parser.add_argument('--sac_horizon', type=int, default=64)
+    parser.add_argument('--num_online_samples', type=int, default=64)
+    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
-    parser.add_argument('--sac_steps', type=int, default=124_000)
+    parser.add_argument('--sac_steps', type=int, default=500_000)
     parser.add_argument('--bnn_steps', type=int, default=32_000)
     parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=5)
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
-    parser.add_argument('--beta', type=float, default=2.0)
+    parser.add_argument('--beta', type=float, default=0.5)
     parser.add_argument('--smoother_steps', type=int, default=16_000)
     parser.add_argument('--smoother_features', type=tuple, default=(64, 64))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
