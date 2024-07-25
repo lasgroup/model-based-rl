@@ -113,12 +113,17 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'wandb_logging': True,
         'return_best_model': True,
     }
+    extra_fields = ('t')
+    extra_fields_shape = (1,)
+    state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
+    
     max_replay_size_true_data_buffer = 10 ** 4
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
                               action=jnp.zeros(shape=(env.action_size,)),
                               reward=jnp.array(0.0),
                               discount=jnp.array(0.99),
-                              next_observation=jnp.ones(env.observation_size))
+                              next_observation=jnp.ones(env.observation_size),
+                              extras={'state_extras': state_extras})
 
     sac_buffer = UniformSamplingQueue(
         max_replay_size=max_replay_size_true_data_buffer,
@@ -145,7 +150,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
         num_envs=1,
         num_eval_envs=1,
         log_to_wandb=True,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
+        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+        state_extras_ref=state_extras,
     )
 
     agent_state = agent.run_episodes(num_episodes=20,
