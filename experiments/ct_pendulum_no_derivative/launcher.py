@@ -6,7 +6,7 @@ general_configs = {
     'num_offline_samples': [0, 1_000, 5_000, 10_000],
     'sac_horizon': [100, 200],
     'deterministic_policy_for_data_collection': [0, 1],
-    'seed': [17, 42, 69, 420],
+    'seed': [17, 42, 69],
     'num_episodes': [30],
     'sac_steps': [500_000],
     'bnn_steps': [32_000, 48_000],
@@ -15,7 +15,7 @@ general_configs = {
     'reset_statistical_model': [0, 1],
     'regression_model': ['probabilistic_ensemble', 'deterministic_ensemble'],
     'beta': [2.0],
-    'weight_decay': [0.0],
+    'bnn_weight_decay': [0.0],
 }
 
 
