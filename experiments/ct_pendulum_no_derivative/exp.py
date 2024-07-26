@@ -158,7 +158,8 @@ def experiment(project_name: str = 'CT_Pendulum',
     if num_offline_samples > 0:
         offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                            num_samples=num_offline_samples,
-                                                           trajectory_length=sac_horizon)
+                                                           trajectory_length=num_online_samples,
+                                                           plot_results=True)
     else:
         offline_data = None
 
@@ -248,6 +249,20 @@ def experiment(project_name: str = 'CT_Pendulum',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
+    sac_learning_schedule = {
+        first_episode_for_policy_training: 20_000,
+        first_episode_for_policy_training + 3: 50_000,
+        first_episode_for_policy_training + 6: 100_000,
+        first_episode_for_policy_training + 9: 200_000,
+        first_episode_for_policy_training + 12: 400_000,
+        first_episode_for_policy_training + 15: 1_000_000,
+    }
+    for key in sac_learning_schedule:
+        if sac_learning_schedule[key] < 2*sac_kwargs['min_replay_size']:
+        # '2 times' since due to the environment number it has to sometimes do more steps than min_replay_size
+        # -> to make sure it works
+            raise ValueError(f"min_replay_size should be at least 2*{sac_learning_schedule[key]}")
+        
     agent_kwargs = {
         'env': env,
         'eval_env': env,
@@ -265,6 +280,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         'reset_statistical_model': reset_statistical_model,
         'dt': env.dt,
         'state_extras_ref': state_extras,
+        'actor_learning_schedule': sac_learning_schedule,
     }
 
     config = dict(num_offline_samples=num_offline_samples,
@@ -336,9 +352,9 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='CT_Pendulum')
-    parser.add_argument('--num_offline_samples', type=int, default=1024)
-    parser.add_argument('--sac_horizon', type=int, default=64)
-    parser.add_argument('--num_online_samples', type=int, default=64)
+    parser.add_argument('--num_offline_samples', type=int, default=200) # has to be multiple of num_online_samples
+    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
@@ -348,12 +364,12 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
-    parser.add_argument('--exploration', type=str, default='optimistic')
+    parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
     parser.add_argument('--beta', type=float, default=0.5)
-    parser.add_argument('--smoother_steps', type=int, default=16_000)
-    parser.add_argument('--smoother_features', type=tuple, default=(64, 64))
+    parser.add_argument('--smoother_steps', type=int, default=32_000)
+    parser.add_argument('--smoother_features', type=tuple, default=(64, 64, 64))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
     parser.add_argument('--log_wandb', type=int, default=1)

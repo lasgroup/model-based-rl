@@ -3,6 +3,7 @@ from functools import partial
 from typing import Tuple
 import os
 import pickle
+import bisect
 
 import chex
 import jax.numpy as jnp
@@ -55,6 +56,7 @@ class BaseModelBasedAgent(ABC):
                  save_trajectory_transitions: bool = False,
                  dt: float = 0.05,
                  state_extras_ref: dict = {},
+                 actor_learning_schedule: dict | None = None,
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -76,6 +78,9 @@ class BaseModelBasedAgent(ABC):
         self.save_trajectory_transitions = save_trajectory_transitions
         self.dt = dt
         self.state_extras_ref = state_extras_ref
+        self.actor_learning_schedule = actor_learning_schedule
+        if self.actor_learning_schedule:
+            self.sorted_schedule_keys = sorted(self.actor_learning_schedule.keys())
 
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(
@@ -143,6 +148,9 @@ class BaseModelBasedAgent(ABC):
         optimizer_state = agent_state.optimizer_state
         # TODO: here we always start training the optimizer from scratch, we might want to just continue training after
         #  the data buffer surpasses certain margin
+        if self.actor_learning_schedule:
+            schedule_idx = bisect.bisect_right(self.sorted_schedule_keys, episode_idx)
+            self.actor.optimizer.agent_kwargs['num_timesteps'] = self.actor_learning_schedule[self.sorted_schedule_keys[schedule_idx-1]]
         optimizer_output = self.actor.train(opt_state=optimizer_state)
         new_agent_state = agent_state.replace(optimizer_state=optimizer_output.optimizer_state)
         return new_agent_state
