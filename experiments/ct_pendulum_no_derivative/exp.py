@@ -351,34 +351,34 @@ def main(args):
                smoother_features=args.smoother_features,
                smoother_train_share=args.smoother_train_share,
                smoother_weight_decay=args.smoother_weight_decay,
-               log_mode=bool(args.log_mode),
+               log_mode=args.log_mode,
                )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='CT_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=1_000) # has to be multiple of num_online_samples
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=4)
+    parser.add_argument('--num_episodes', type=int, default=30)
     parser.add_argument('--sac_steps', type=int, default=500_000)
     parser.add_argument('--bnn_steps', type=int, default=32_000)
     parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
-    parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
+    parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
-    parser.add_argument('--beta', type=float, default=0.5)
+    parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
+    parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--smoother_steps', type=int, default=32_000)
     parser.add_argument('--smoother_features', type=tuple, default=(128, 128))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
-    parser.add_argument('--log_mode', type=int, default=1)
+    parser.add_argument('--log_mode', type=int, default=3)
 
     args = parser.parse_args()
     main(args)
