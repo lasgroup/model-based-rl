@@ -1,32 +1,15 @@
 import argparse
-import os
-os.environ['JAX_PLATFORMS'] = 'cpu'
-import chex
-import jax
-import jax.numpy as jnp
-import jax.random as jr
-import wandb
-from brax.training.replay_buffers import UniformSamplingQueue
-from brax.training.types import Transition
-from bsm.bayesian_regression.bayesian_neural_networks.deterministic_ensembles import DeterministicEnsemble
-from bsm.bayesian_regression import ProbabilisticEnsemble, DeterministicFSVGDEnsemble, ProbabilisticFSVGDEnsemble
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
-from distrax import Normal
-from jax.nn import swish
-from mbpo.optimizers import SACOptimizer
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
-from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
-from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
-from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
-from mbrl.utils.offline_data import SmootherPendulumOfflineData
-from diff_smoothers.smoother_net import SmootherNet
-
-jax.config.update("jax_debug_nans", True)
+#import os
+#os.environ['JAX_PLATFORMS'] = 'cpu'
 
 ENTITY = 'cbiel01'
 
+# Logging mode:
+# 0 - No logging
+# 1 - Logging learning metrics
+# 2 - Additional Logging of performance plots
+# 3 - Additional Logging of Dyn. Model Learning metrics
+# 4 - Additional Logging of offline data
 
 def experiment(project_name: str = 'CT_Pendulum',
                num_offline_samples: int = 0,
@@ -49,8 +32,31 @@ def experiment(project_name: str = 'CT_Pendulum',
                smoother_features: tuple = (64, 64),
                smoother_train_share: float = 1.0,
                smoother_weight_decay: float = 1e-4,
-               log_wandb: bool = True,
+               log_mode: int = 2,
                ):
+    
+    import chex
+    import jax
+    import jax.numpy as jnp
+    import jax.random as jr
+    import wandb
+    from brax.training.replay_buffers import UniformSamplingQueue
+    from brax.training.types import Transition
+    from bsm.bayesian_regression.bayesian_neural_networks.deterministic_ensembles import DeterministicEnsemble
+    from bsm.bayesian_regression import ProbabilisticEnsemble, DeterministicFSVGDEnsemble, ProbabilisticFSVGDEnsemble
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
+    from distrax import Normal
+    from jax.nn import swish
+    from mbpo.optimizers import SACOptimizer
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+
+    from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
+    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
+    from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
+    from mbrl.utils.offline_data import SmootherPendulumOfflineData
+    from diff_smoothers.smoother_net import SmootherNet
+    
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
@@ -67,7 +73,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             features=bnn_features,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
-            logging_wandb=log_wandb,
+            logging_wandb=log_mode > 2,
             return_best_model=True,
             eval_batch_size=64,
             train_share=bnn_train_share,
@@ -83,7 +89,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=bnn_features,
             num_particles=10,
-            logging_wandb=log_wandb,
+            logging_wandb=log_mode > 2,
             return_best_model=True,
             eval_batch_size=64,
             train_share=bnn_train_share,
@@ -101,7 +107,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             features=bnn_features,
             bnn_type=DeterministicFSVGDEnsemble,
             num_particles=10,
-            logging_wandb=log_wandb,
+            logging_wandb=log_mode > 2,
             return_best_model=True,
             eval_batch_size=64,
             train_share=bnn_train_share,
@@ -119,7 +125,7 @@ def experiment(project_name: str = 'CT_Pendulum',
             features=bnn_features,
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
-            logging_wandb=log_wandb,
+            logging_wandb=log_mode > 2,
             return_best_model=True,
             eval_batch_size=64,
             train_share=bnn_train_share,
@@ -159,7 +165,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                            num_samples=num_offline_samples,
                                                            trajectory_length=num_online_samples,
-                                                           plot_results=True)
+                                                           plot_results=log_mode > 3)
     else:
         offline_data = None
 
@@ -193,7 +199,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
-        'wandb_logging': log_wandb,
+        'wandb_logging': log_mode > 1,
         'return_best_model': True,
     }
 
@@ -273,7 +279,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         'offline_data': offline_data,
         'num_envs': 1,
         'num_eval_envs': 1,
-        'log_to_wandb': log_wandb,
+        'log_mode': log_mode,
         'deterministic_policy_for_data_collection': deterministic_policy_for_data_collection,
         'first_episode_for_policy_training': first_episode_for_policy_training,
         'predict_difference': False,
@@ -307,7 +313,7 @@ def experiment(project_name: str = 'CT_Pendulum',
                   agent_kwargs=agent_kwargs,
                   )
     
-    if log_wandb:
+    if log_mode > 0:
         wandb.init(project=project_name,
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
@@ -345,19 +351,19 @@ def main(args):
                smoother_features=args.smoother_features,
                smoother_train_share=args.smoother_train_share,
                smoother_weight_decay=args.smoother_weight_decay,
-               log_wandb=bool(args.log_wandb),
+               log_mode=bool(args.log_mode),
                )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='CT_Pendulum')
-    parser.add_argument('--num_offline_samples', type=int, default=200) # has to be multiple of num_online_samples
+    parser.add_argument('--project_name', type=str, default='CT_Pendulum_Debug')
+    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--num_online_samples', type=int, default=200)
-    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=30)
+    parser.add_argument('--num_episodes', type=int, default=4)
     parser.add_argument('--sac_steps', type=int, default=500_000)
     parser.add_argument('--bnn_steps', type=int, default=32_000)
     parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
@@ -369,10 +375,10 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='deterministic_ensemble')
     parser.add_argument('--beta', type=float, default=0.5)
     parser.add_argument('--smoother_steps', type=int, default=32_000)
-    parser.add_argument('--smoother_features', type=tuple, default=(64, 64, 64))
+    parser.add_argument('--smoother_features', type=tuple, default=(128, 128))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
-    parser.add_argument('--log_wandb', type=int, default=1)
+    parser.add_argument('--log_mode', type=int, default=1)
 
     args = parser.parse_args()
     main(args)

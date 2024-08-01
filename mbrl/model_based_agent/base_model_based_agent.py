@@ -50,7 +50,7 @@ class BaseModelBasedAgent(ABC):
                  predict_difference: bool = False,
                  reset_statistical_model: bool = True,
                  key: chex.PRNGKey = jr.PRNGKey(0),
-                 log_to_wandb: bool = False,
+                 log_mode: int = 0,
                  deterministic_policy_for_data_collection: bool = False,
                  first_episode_for_policy_training: int = -1,
                  save_trajectory_transitions: bool = False,
@@ -72,7 +72,7 @@ class BaseModelBasedAgent(ABC):
         self.predict_difference = predict_difference
         self.reset_statistical_model = reset_statistical_model
         self.key = key
-        self.log_to_wandb = log_to_wandb
+        self.log_mode = log_mode
         self.deterministic_policy_for_data_collection = deterministic_policy_for_data_collection
         self.first_episode_for_policy_training = first_episode_for_policy_training
         self.save_trajectory_transitions = save_trajectory_transitions
@@ -241,7 +241,7 @@ class BaseModelBasedAgent(ABC):
         # We collect new data with the current policy
         print(f'Start of data collection')
         agent_state, trajectory_transitions = self.simulate_on_true_env(agent_state=agent_state)
-        if self.save_trajectory_transitions and self.log_to_wandb:
+        if self.save_trajectory_transitions and self.log_mode > 0:
             directory = os.path.join(wandb.run.dir, 'results')
             if not os.path.exists(directory):
                 os.makedirs(directory)
@@ -253,7 +253,7 @@ class BaseModelBasedAgent(ABC):
         print(f'Start with evaluation of the policy')
         metrics, data = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
-        if self.log_to_wandb:
+        if self.log_mode > 1:
             # Check what the dynamics model is predicting
             x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
             x_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
@@ -274,7 +274,7 @@ class BaseModelBasedAgent(ABC):
                                        source='dyn.model')
             wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
             plt.close(fig)
-
+        if self.log_mode > 0:
             wandb.log(metrics | {'episode_idx': episode_idx})
         else:
             print(metrics)

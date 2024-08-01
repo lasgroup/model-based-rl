@@ -29,6 +29,9 @@ class SmootherWrapper(BaseAgentWrapper):
         self.state_data_source = state_data_source
         self.smoother_model = smoother_net
         
+        if self.log_mode > 0:
+            wandb.define_metric("dynamics_model/data", summary="min")
+
         # Override the env_interactor so as not to try to pull true_derivatives from the environment
         extra_fields = list(self.state_extras_ref.keys())
         extra_fields.remove('true_derivative')
@@ -76,7 +79,7 @@ class SmootherWrapper(BaseAgentWrapper):
         new_statistical_model_state = self.statistical_model.update(
             stats_model_state=statistical_model_state,
             data=data)
-        if self.log_to_wandb:
+        if self.log_mode > 1:
             # Plot the data the dynamics model was trained on
             fig = plot_data(t=log_data['t'].reshape(-1, 1),
                                x=log_data['x'],
@@ -101,6 +104,11 @@ class SmootherWrapper(BaseAgentWrapper):
                                        )
             wandb.log({'dynamics_model/fit': wandb.Image(fig)})
             plt.close(fig)
+        if self.log_mode > 0:
+            inputs = data.inputs
+            pred_x  = self.statistical_model.predict_batch(inputs, new_statistical_model_state)
+            dyn_mse = jnp.power((pred_x.mean - log_data['x_dot_true']), 2).mean(axis=0)
+            wandb.log({"dynamics_model/error_mse": dyn_mse})
         return new_statistical_model_state
     
     def _collected_buffer_to_train_data(self,
@@ -145,7 +153,7 @@ class SmootherWrapper(BaseAgentWrapper):
         ders = self.smoother_model.derivative_batch(inputs, model_states)
 
         # Log the smoother performance to wandb as a plot
-        if self.log_to_wandb:
+        if self.log_mode > 1:
             fig, _ = self.smoother_model.plot_fit(inputs=inputs,
                                                   pred_x=pred_x.mean,
                                                   true_x=outputs,
