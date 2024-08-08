@@ -18,8 +18,9 @@ def experiment(project_name: str = 'CT_Pendulum',
                deterministic_policy_for_data_collection: bool = False,
                seed: int = 42,
                num_episodes: int = 20,
-               sac_steps: int = 1_000_000,
-               bnn_steps: int = 5_000,
+               sac_steps: int = 500_000,
+               bnn_steps: int = 50_000,
+               bnn_use_schedule: bool = True,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -39,6 +40,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     import jax
     import jax.numpy as jnp
     import jax.random as jr
+    import optax
     import wandb
     from brax.training.replay_buffers import UniformSamplingQueue
     from brax.training.types import Transition
@@ -62,6 +64,16 @@ def experiment(project_name: str = 'CT_Pendulum',
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
     env = ContinuousPendulumEnv(reward_source='dm-control')
+
+    # Create the BNN num_training_steps schedule
+    if bnn_use_schedule:
+        bnn_steps = optax.piecewise_constant_schedule(
+            init_value=bnn_steps/8,
+            boundaries_and_scales={500: 2, 1_000: 2, 4_000: 2},
+        )
+
+    else:
+        bnn_steps = optax.constant_schedule(bnn_steps)
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -257,11 +269,10 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     sac_learning_schedule = {
         first_episode_for_policy_training: 20_000,
-        first_episode_for_policy_training + 3: 50_000,
-        first_episode_for_policy_training + 6: 100_000,
-        first_episode_for_policy_training + 9: 200_000,
-        first_episode_for_policy_training + 12: 400_000,
-        first_episode_for_policy_training + 15: 1_000_000,
+        first_episode_for_policy_training + 2: 50_000,
+        first_episode_for_policy_training + 4: 100_000,
+        first_episode_for_policy_training + 8: 200_000,
+        first_episode_for_policy_training + 12: sac_steps,
     }
     for key in sac_learning_schedule:
         if sac_learning_schedule[key] < 2*sac_kwargs['min_replay_size']:
@@ -358,24 +369,24 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='CT_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=1_000) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
-    parser.add_argument('--sac_steps', type=int, default=500_000)
-    parser.add_argument('--bnn_steps', type=int, default=32_000)
+    parser.add_argument('--sac_steps', type=int, default=400_000)
+    parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
-    parser.add_argument('--exploration', type=str, default='pets')
-    parser.add_argument('--reset_statistical_model', type=int, default=0)
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=3)
+    parser.add_argument('--exploration', type=str, default='optimistic')
+    parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--smoother_steps', type=int, default=32_000)
-    parser.add_argument('--smoother_features', type=tuple, default=(128, 128))
+    parser.add_argument('--smoother_steps', type=int, default=48_000)
+    parser.add_argument('--smoother_features', type=tuple, default=(64, 64, 64))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
     parser.add_argument('--log_mode', type=int, default=3)

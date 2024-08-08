@@ -22,7 +22,7 @@ from mbpo.utils.type_aliases import OptimizerState
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor
 from mbrl.utils.brax_utils import EnvInteractor
-from diff_smoothers.data_functions.data_output import plot_prediction_data
+from diff_smoothers.data_functions.data_output import plot_prediction_data, plot_derivative_data
 from matplotlib import pyplot as plt
 
 @chex.dataclass
@@ -57,6 +57,7 @@ class BaseModelBasedAgent(ABC):
                  dt: float = 0.05,
                  state_extras_ref: dict = {},
                  actor_learning_schedule: dict | None = None,
+                 log_to_wandb: bool = False,
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -81,7 +82,9 @@ class BaseModelBasedAgent(ABC):
         self.actor_learning_schedule = actor_learning_schedule
         if self.actor_learning_schedule:
             self.sorted_schedule_keys = sorted(self.actor_learning_schedule.keys())
-
+        if log_to_wandb:
+            self.log_mode = 2
+        
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(
             env=self.env,
@@ -255,16 +258,18 @@ class BaseModelBasedAgent(ABC):
                                                      actor_state=agent_state.optimizer_state)
         if self.log_mode > 1:
             # Check what the dynamics model is predicting
-            x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
             x_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
+            x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
             input1 = jnp.concatenate([data.observation[0,:], data.action[0,:]], axis=-1).squeeze()
-            x_dot_est = x_dot_est.at[0,:].set(self.statistical_model(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state).mean.squeeze())
             x_est = x_est.at[0,:].set(data.observation[0,:].squeeze())
+            initial_model_output = self.statistical_model(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+            x_dot_est = x_dot_est.at[0,:].set(initial_model_output.mean.squeeze())
             for i in range(1, len(data.extras['state_extras']['t'])):
                 new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dt
                 x_est = x_est.at[i,:].set(new_x_est.squeeze())
-                x_dot_est = x_dot_est.at[i,:].set(self.statistical_model(jnp.concatenate([x_est[i,:], data.action[i,:].reshape(-1,)]),
-                                                                agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state).mean)
+                model_outputs = self.statistical_model(jnp.concatenate([x_est[i,:], data.action[i,:].reshape(-1,)]),
+                                                                agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+                x_dot_est = x_dot_est.at[i,:].set(model_outputs.mean)
             # Plot the predicted and true dynamics
             fig = plot_prediction_data(t=data.extras['state_extras']['t'].reshape(-1,1),
                                        x_true=data.observation.reshape(-1, data.observation.shape[-1]),
@@ -273,6 +278,21 @@ class BaseModelBasedAgent(ABC):
                                        beta=jnp.zeros((data.observation.shape[-1])),
                                        source='dyn.model')
             wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
+            plt.close(fig)
+            # Plot the model prediccted dynamics OFF OF THE TRUE STATE!
+            pred_dx = self.statistical_model.predict_batch(jnp.concatenate([data.observation.reshape(-1, data.observation.shape[-1]), data.action.reshape(-1, data.action.shape[-1])], axis=-1),
+                                            agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+            fig = plot_derivative_data(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                                       x = data.observation.reshape(-1, data.observation.shape[-1]),
+                                       x_dot_true = data.extras['state_extras']['derivative'].reshape(-1, data.observation.shape[-1]),
+                                       x_dot_est=pred_dx.mean,
+                                       x_dot_est_std=pred_dx.epistemic_std,
+                                       source='Dyn. Model',
+                                       beta = pred_dx.statistical_model_state.beta,
+                                       num_trajectory_to_plot=-1,
+                                       state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
+                                       )
+            wandb.log({'eval_true_env/dyn_model_derivative': wandb.Image(fig)})
             plt.close(fig)
         if self.log_mode > 0:
             wandb.log(metrics | {'episode_idx': episode_idx})

@@ -33,7 +33,8 @@ def env_step(
     action, new_actor_state = actor.act(env_state.obs, opt_state=actor_state, evaluate=evaluate)
     next_env_state = env.step(env_state, action)
     state_extras = {x: next_env_state.info[x] for x in extra_fields} #t, dt, derivative
-    state_extras['t'] = env_state.info['t']
+    if 't' in extra_fields:
+        state_extras['t'] = env_state.info['t']
     return next_env_state, new_actor_state, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=action,
@@ -97,7 +98,8 @@ class Evaluator:
     def generate_eval_unroll(self,
                              opt_state: OptimizerState,
                              actor: Actor,
-                             rng: jax.random.PRNGKey) -> State:
+                             rng: jax.random.PRNGKey,
+                             extra_fields: Sequence[str] = ()) -> State:
         reset_keys = jax.random.split(rng, self.num_eval_envs)
         eval_first_state = self.eval_env.reset(reset_keys)
         state, _ , data = generate_unroll(
@@ -106,19 +108,21 @@ class Evaluator:
             actor=actor,
             actor_state=opt_state,
             unroll_length=self.episode_length // self.action_repeat,
+            extra_fields=extra_fields,
             evaluate=True)
         return state, data
 
     def run_evaluation(self,
                        actor_state: OptimizerState,
                        actor: Actor,
-                       aggregate_episodes: bool = True) -> Metrics:
+                       aggregate_episodes: bool = True,
+                       extra_fields: Sequence[str] = ()) -> Metrics:
         """Run one epoch of evaluation."""
         self._key, unroll_key, opt_key = jax.random.split(self._key, 3)
         eval_opt_state = actor_state.replace(key=opt_key)
 
         t = time.time()
-        eval_state, data = self.generate_eval_unroll(eval_opt_state, actor, unroll_key)
+        eval_state, data = self.generate_eval_unroll(eval_opt_state, actor, unroll_key, extra_fields)
         eval_metrics = eval_state.info['eval_metrics']
         eval_metrics.active_episodes.block_until_ready()
         epoch_eval_time = time.time() - t
@@ -235,6 +239,7 @@ class EnvInteractor:
         return self.evaluator.run_evaluation(
             actor_state=actor_state,
             actor=actor,
+            extra_fields=self.extra_fields
         )
 
     @property
