@@ -7,6 +7,7 @@ required = [
     'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git',
     'bsm @ git+https://github.com/lasgroup/bayesian_statistical_models.git',
     'wtc @ git+ssh://git@github.com/lenarttreven/when_to_control.git',
+    'diff_smoothers @ git+https://github.com/ChristopherBiel/differentiating-smoother.git',
     'ray',
 ]
 
