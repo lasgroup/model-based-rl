@@ -387,7 +387,7 @@ if __name__ == '__main__':
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--smoother_steps', type=int, default=48_000)
+    parser.add_argument('--smoother_steps', type=int, default=72_000)
     parser.add_argument('--smoother_features', type=tuple, default=(64, 64, 64))
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
