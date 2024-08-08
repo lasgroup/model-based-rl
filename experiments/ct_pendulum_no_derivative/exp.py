@@ -59,6 +59,8 @@ def experiment(project_name: str = 'CT_Pendulum',
     from mbrl.utils.offline_data import SmootherPendulumOfflineData
     from diff_smoothers.smoother_net import SmootherNet
     
+    jax.config.update('jax_enable_x64', True)
+
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
@@ -377,10 +379,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=30)
     parser.add_argument('--sac_steps', type=int, default=400_000)
     parser.add_argument('--bnn_steps', type=int, default=48_000)
-    parser.add_argument('--bnn_features', type=tuple, default=(128, 128))
+    parser.add_argument('--bnn_features', type=tuple, default=(64, 64, 64))
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=3)
+    parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
