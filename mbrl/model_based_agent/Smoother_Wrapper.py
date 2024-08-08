@@ -172,7 +172,7 @@ class SmootherWrapper(BaseAgentWrapper):
                 discount=longest_trajectory.discount,
                 next_observation=longest_trajectory.next_observation,
                 extras={'state_extras': {'t': longest_trajectory.extras['state_extras']['t'],
-                                         'true_derivative': c,
+                                         'true_derivative': longest_trajectory.extras['state_extras']['derivative'],
                                          'derivative': ders.mean,
                                          'dt': longest_trajectory.extras['state_extras']['dt']}}
             )
