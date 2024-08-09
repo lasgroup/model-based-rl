@@ -71,7 +71,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     if bnn_use_schedule:
         bnn_steps = optax.piecewise_constant_schedule(
             init_value=bnn_steps/8,
-            boundaries_and_scales={500: 2, 1_000: 2, 4_000: 2},
+            boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
         )
 
     else:
@@ -270,10 +270,10 @@ def experiment(project_name: str = 'CT_Pendulum',
             return {'dt': env.dt}
 
     sac_learning_schedule = {
-        first_episode_for_policy_training: 20_000,
-        first_episode_for_policy_training + 2: 50_000,
-        first_episode_for_policy_training + 4: 100_000,
-        first_episode_for_policy_training + 8: 200_000,
+        first_episode_for_policy_training: sac_steps/16,
+        first_episode_for_policy_training + 2: sac_steps/8,
+        first_episode_for_policy_training + 4: sac_steps/4,
+        first_episode_for_policy_training + 8: sac_steps/2,
         first_episode_for_policy_training + 12: sac_steps,
     }
     for key in sac_learning_schedule:
