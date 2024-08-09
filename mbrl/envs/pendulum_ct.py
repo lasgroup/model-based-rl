@@ -99,7 +99,7 @@ class ContinuousPendulumEnv(Env):
         newth = th + dx_compressed[0] * dt
         newthdot = thdot + dx_compressed[-1] * dt # Compute dx with this?
         newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed) # == dx_compressed[0]
-        dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, dx_compressed[-1]]).reshape(-1)
+        dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, (newthdot - thdot)/dt]).reshape(-1)
         next_obs = jnp.asarray([jnp.cos(newth), jnp.sin(newth), newthdot]).reshape(-1)
         if self.reward_source == 'gym':
             next_reward = self.reward(x, action)
