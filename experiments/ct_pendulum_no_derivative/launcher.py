@@ -10,7 +10,7 @@ general_configs = {
     'num_episodes': [30],
     'sac_steps': [800_000],
     'bnn_steps': [48_000],
-    'bnn_features': ['256, 256','64, 64, 64', '128, 128, 128', '256, 256, 256'],
+    'bnn_features': ['256_256', '64_64_64', '128_128_128', '256_256_256'],
     'first_episode_for_policy_training': [1],
     'exploration': ['pets'],
     'reset_statistical_model': [0],
@@ -31,7 +31,8 @@ def main():
     generate_run_commands(command_list,
                           num_cpus=1,
                           num_gpus=1,
-                          mode='euler',
+                          mode='local',
+                          dry=False,
                           duration='23:59:00',
                           prompt=True,
                           mem=16000)
