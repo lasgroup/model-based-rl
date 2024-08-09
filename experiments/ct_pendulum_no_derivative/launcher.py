@@ -10,7 +10,7 @@ general_configs = {
     'num_episodes': [30],
     'sac_steps': [800_000],
     'bnn_steps': [48_000],
-    'bnn_features': ['(256, 256)','(64, 64, 64)', '(128, 128, 128)', '(256, 256, 256)'],
+    'bnn_features': ['256, 256','64, 64, 64', '128, 128, 128', '256, 256, 256'],
     'first_episode_for_policy_training': [1],
     'exploration': ['pets'],
     'reset_statistical_model': [0],
