@@ -27,7 +27,7 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
                  statistical_model: StatisticalModel,
                  aleatoric_noise_in_prediction: bool = True,
                  predict_difference: bool = False,
-                 dt: float = 0.05
+                 dt: float = 0.05,
                  ):
         Dynamics.__init__(self, x_dim=x_dim, u_dim=u_dim)
         self.statistical_model = statistical_model

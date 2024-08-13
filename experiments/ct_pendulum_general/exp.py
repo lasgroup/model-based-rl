@@ -181,6 +181,7 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (env.observation_size, 1, 1)
+    # extra_fields_shape = (env.observation_size,) * 1 + (1,) * 2
     state_extras: dict = {x: jnp.zeros(shape=(y,)) for x,y in zip(extra_fields, extra_fields_shape)}
 
     dummy_sample = Transition(observation=jnp.ones(env.observation_size),
@@ -249,7 +250,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         predict_difference=False,
         reset_statistical_model=reset_statistical_model,
         dt=env.dt,
-        extra_fields=extra_fields,
+        state_extras_ref=state_extras,
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,

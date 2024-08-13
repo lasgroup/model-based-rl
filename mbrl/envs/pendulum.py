@@ -5,13 +5,14 @@ from flax import struct
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 from functools import partial
+import copy
 
 from mbrl.utils.tolerance_reward import ToleranceReward
 
 
 @chex.dataclass
 class PendulumDynamicsParams:
-    max_speed: chex.Array = struct.field(default_factory=lambda: jnp.array(8.0))
+    max_speed: chex.Array = struct.field(default_factory=lambda: jnp.array(14.0))
     max_torque: chex.Array = struct.field(default_factory=lambda: jnp.array(2.0))
     dt: chex.Array = struct.field(default_factory=lambda: jnp.array(0.05))
     g: chex.Array = struct.field(default_factory=lambda: jnp.array(9.81))
@@ -41,10 +42,12 @@ class PendulumEnv(Env):
 
     def reset(self,
               rng: jax.Array) -> State:
+        first_info: dict = {'t': jnp.array(0.0),}
         return State(pipeline_state=None,
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
-                     done=jnp.array(0.0), )
+                     done=jnp.array(0.0),
+                     info=first_info)
 
     def reward(self,
                x: Float[Array, 'observation_dim'],
@@ -92,13 +95,16 @@ class PendulumEnv(Env):
             next_reward = self.dm_reward(x, action)
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
+        
+        next_info = copy.deepcopy(state.info)
+        next_info['t'] += dt
 
         next_state = State(pipeline_state=state.pipeline_state,
                            obs=next_obs,
                            reward=next_reward,
                            done=state.done,
                            metrics=state.metrics,
-                           info=state.info)
+                           info=next_info)
         return next_state
 
     def ode(self, x_compressed: chex.Array, u: chex.Array) -> chex.Array:

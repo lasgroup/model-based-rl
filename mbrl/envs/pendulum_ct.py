@@ -50,14 +50,14 @@ class ContinuousPendulumEnv(Env):
                                                 sigmoid='long_tail')
 
     def reset(self,
-              rng: jax.Array) -> State:
+              rng: jax.Array | None = None) -> State:
         first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
-                            'dt': self.dynamics_params.dt}
+                            'dt': jnp.array(self.dynamics_params.dt)}
         return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
-                     done=jnp.array(0.0), 
+                     done=jnp.array(0.0),
                      info=first_info)
 
     def reward(self,
@@ -99,7 +99,7 @@ class ContinuousPendulumEnv(Env):
         newth = th + dx_compressed[0] * dt
         newthdot = thdot + dx_compressed[-1] * dt # Compute dx with this?
         newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed) # == dx_compressed[0]
-        dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, dx_compressed[-1]]).reshape(-1)
+        dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, (newthdot - thdot)/dt]).reshape(-1)
         next_obs = jnp.asarray([jnp.cos(newth), jnp.sin(newth), newthdot]).reshape(-1)
         if self.reward_source == 'gym':
             next_reward = self.reward(x, action)

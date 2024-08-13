@@ -28,24 +28,6 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def prepare_data_buffers(self) -> UniformSamplingQueue:
-        state_extras_shape  = (self.env.observation_size, 1, 1)
-        state_extras: dict = {x: jnp.zeros(shape=(y,)) for x,y in zip(self.env_interactor.extra_fields, state_extras_shape)}
-        dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
-                                  action=jnp.zeros(shape=(self.env.action_size,)),
-                                  reward=jnp.array(0.0),
-                                  discount=jnp.array(0.99),
-                                  next_observation=jnp.zeros(shape=(self.env.observation_size,)),
-                                  extras={'state_extras': state_extras}
-                                  )
-
-        collected_data_buffer = UniformSamplingQueue(
-            max_replay_size=self.max_collected_data_in_buffer,
-            dummy_data_sample=dummy_sample,
-            sample_batch_size=1)
-
-        return collected_data_buffer
-
     def _collected_buffer_to_train_data(self, collected_buffer_state: ReplayBufferState):
         idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
         all_data = jnp.take(collected_buffer_state.data, idx, axis=0, mode='wrap')
@@ -53,7 +35,6 @@ class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
         obs = all_transitions.observation
         actions = all_transitions.action
         inputs = jnp.concatenate([obs, actions], axis=-1)
-        next_obs = all_transitions.next_observation
         derivatives = all_transitions.extras['state_extras']['derivative']
         if self.predict_difference:
             raise NotImplementedError

@@ -53,7 +53,7 @@ class BaseModelBasedAgent(ABC):
                  first_episode_for_policy_training: int = -1,
                  save_trajectory_transitions: bool = False,
                  dt: float = 0.05,
-                 extra_fields: Sequence[str] = (),
+                 state_extras_ref: dict = {},
                  ):
         self.env = env
         self.statistical_model = statistical_model
@@ -74,7 +74,7 @@ class BaseModelBasedAgent(ABC):
         self.first_episode_for_policy_training = first_episode_for_policy_training
         self.save_trajectory_transitions = save_trajectory_transitions
         self.dt = dt
-        self.extra_fields = extra_fields
+        self.state_extras_ref = state_extras_ref
 
         self.key, subkey = jr.split(self.key)
         self.env_interactor = EnvInteractor(
@@ -86,7 +86,7 @@ class BaseModelBasedAgent(ABC):
             action_repeat=self.action_repeat,
             key=subkey,
             deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-            extra_fields=self.extra_fields)
+            extra_fields=list(self.state_extras_ref.keys()))
 
         self.collected_data_buffer = self.prepare_data_buffers()
         self.actor = self.prepare_actor(optimizer)
@@ -97,6 +97,7 @@ class BaseModelBasedAgent(ABC):
                                   reward=jnp.array(0.0),
                                   discount=jnp.array(0.99),
                                   next_observation=jnp.zeros(shape=(self.env.observation_size,)),
+                                  extras={'state_extras': self.state_extras_ref}
                                   )
 
         collected_data_buffer = UniformSamplingQueue(
