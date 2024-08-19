@@ -319,7 +319,7 @@ if __name__ == '__main__':
         return tuple(map(int, value.split('_')))
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
+    parser.add_argument('--project_name', type=str, default='ICEM_Pendulum')
     parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
@@ -335,11 +335,11 @@ if __name__ == '__main__':
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--smoother_steps', type=int, default=72_000)
+    parser.add_argument('--smoother_steps', type=int, default=48_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
-    parser.add_argument('--log_mode', type=int, default=0)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)
