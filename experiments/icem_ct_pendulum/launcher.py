@@ -2,16 +2,19 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_Pendulum_Sweep_0819'],
+    'project_name': ['ICEM_Pendulum_Debug'],
     'num_offline_samples': [0, 200, 400, 1_000],
-    'deterministic_policy_for_data_collection': [0, 1],
+    'optimizer_horizon': [10, 20, 40],
+    'icem_num_steps': [10, 20, 40],
+    'icem_colored_noise_exponent': [2.0],
+    'reward_source': ['gym'],
     'seed': [42],
     'num_episodes': [30],
-    'bnn_steps': [48_000],
-    'bnn_features': ['256_256', '64_64_64', '128_128_128'],
+    'bnn_steps': [64_000],
+    'bnn_features': ['256_256', '64_64_64'],
     'exploration': ['pets', 'optimistic'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble', 'probabilistic_FSVGD'],
+    'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'bnn_weight_decay': [0.0],
 }

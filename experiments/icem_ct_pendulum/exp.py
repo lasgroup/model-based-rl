@@ -13,10 +13,13 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                optimizer_horizon: int = 20,
                num_online_samples: int = 200,
                deterministic_policy_for_data_collection: bool = False,
+               icem_num_steps: int = 10,
+               icem_colored_noise_exponent: float = 3.0,
+               reward_source: str = 'dm-control',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
-               bnn_use_schedule: bool = True,
+               bnn_use_schedule: bool = False,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -29,6 +32,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                smoother_features: tuple = (64, 64),
                smoother_train_share: float = 1.0,
                smoother_weight_decay: float = 1e-4,
+               state_data_source: str = 'smoother',
                log_mode: int = 2,
                ):
     
@@ -47,6 +51,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from distrax import Normal
     from jax.nn import swish
     from mbpo.optimizers.trajectory_optimizers.icem_brax_wrapper import iCEMOptimizer
+    from mbpo.optimizers.trajectory_optimizers.icem_optimizer import iCemParams
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
@@ -60,8 +65,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
+    assert reward_source in ['dm-control', 'gym']
 
-    env = ContinuousPendulumEnv(reward_source='dm-control')
+    env = ContinuousPendulumEnv(reward_source=reward_source)
 
     # Create the BNN num_training_steps schedule
     if bnn_use_schedule:
@@ -197,8 +203,14 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         dummy_data_sample=dummy_sample,
         sample_batch_size=1)
 
+    opt_params = iCemParams(
+        num_steps=icem_num_steps,
+        exponent=icem_colored_noise_exponent,
+        )
+    
     optimizer = iCEMOptimizer(horizon=optimizer_horizon,
                               key = jr.PRNGKey(seed),
+                              opt_params=opt_params,
                               )
 
     agent_class = None
@@ -207,7 +219,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
 
-    class PendulumReward(Reward):
+    class DMPendulumReward(Reward):
         def __init__(self):
             super().__init__(x_dim=3, u_dim=1)
 
@@ -230,14 +242,45 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
+        
+    class GymPendulumReward(Reward):
+        def __init__(self):
+            super().__init__(x_dim=3, u_dim=1)
 
+        def __call__(self,
+                     x: chex.Array,
+                     u: chex.Array,
+                     reward_params: RewardParams,
+                     x_next: chex.Array | None = None
+                     ):
+            assert x.shape == (3,) and u.shape == (1,)
+            theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
+            target_angle = env.reward_params.target_angle
+            diff_th = theta - target_angle
+            diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
+            reward = -(env.reward_params.angle_cost * diff_th ** 2 +
+                        0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+            reward = reward.squeeze()
+            reward_dist = Normal(reward, jnp.zeros_like(reward))
+            return reward_dist, reward_params
+
+        def init_params(self, key: chex.PRNGKey) -> RewardParams:
+            return {'dt': env.dt}
+
+    if reward_source == 'dm-control':
+        reward_model = DMPendulumReward()
+    elif reward_source == 'gym':
+        reward_model = GymPendulumReward()
+    else:   
+        raise NotImplementedError(f'Unknown reward source {reward_source}')
+    
     agent_kwargs = {
         'env': env,
         'eval_env': env,
         'statistical_model': model,
         'optimizer': optimizer,
         'episode_length': num_online_samples,
-        'reward_model': PendulumReward(),
+        'reward_model': reward_model,
         'offline_data': offline_data,
         'num_envs': 1,
         'num_eval_envs': 1,
@@ -254,6 +297,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   sample_horizon=num_online_samples,
                   optimizer_horizon=optimizer_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  icem_num_steps=icem_num_steps,
+                  icem_colored_noise_exponent=icem_colored_noise_exponent,
+                  reward_source=reward_source,
                   seed=seed,
                   num_episodes=num_episodes,
                   bnn_steps=bnn_steps,
@@ -269,6 +315,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   smoother_features=smoother_features,
                   smoother_train_share=smoother_train_share,
                   smoother_weight_decay=smoother_weight_decay,
+                  state_data_source=state_data_source,
                   agent_kwargs=agent_kwargs,
                   )
     
@@ -279,7 +326,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     base_agent = SmootherWrapper(agent_type=agent_class,
                                  smoother_net=smoother_model,
-                                 state_data_source='smoother',
+                                 state_data_source=state_data_source,
                                  **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
@@ -294,6 +341,9 @@ def main(args):
                optimizer_horizon=args.optimizer_horizon,
                num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               icem_num_steps=args.icem_num_steps,
+               icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+               reward_source=args.reward_source,
                seed=args.seed,
                num_episodes=args.num_episodes,
                bnn_steps=args.bnn_steps,
@@ -309,6 +359,7 @@ def main(args):
                smoother_features=args.smoother_features,
                smoother_train_share=args.smoother_train_share,
                smoother_weight_decay=args.smoother_weight_decay,
+               state_data_source=args.state_data_source,
                log_mode=args.log_mode,
                )
 
@@ -319,15 +370,18 @@ if __name__ == '__main__':
         return tuple(map(int, value.split('_')))
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='ICEM_Pendulum')
-    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
+    parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
+    parser.add_argument('--num_offline_samples', type=int, default=2000) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
+    parser.add_argument('--icem_num_steps', type=int, default=20)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=0.0)
+    parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
     parser.add_argument('--bnn_steps', type=int, default=64_000)
-    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='128_128_128')
+    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
@@ -339,7 +393,8 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
-    parser.add_argument('--log_mode', type=int, default=2)
+    parser.add_argument('--state_data_source', type=str, default='smoother')
+    parser.add_argument('--log_mode', type=int, default=3)
 
     args = parser.parse_args()
     main(args)
