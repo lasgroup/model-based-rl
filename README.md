@@ -47,10 +47,12 @@ Repository for doing model based RL
     export TF_DETERMINISTIC_OPS=0
 
     module load stack/2024-06
-    module load python_cuda/3.11.6
+    module load gcc/12.2.0
     module load eth_proxy
+    module load python/3.11.6
 
-    PYTHONPATH=$PYTHONPATH:/path/on/euler/to/model-based-rl
+    PYTHONPATH=$PYTHONPATH:/cluster/home/kiten/copax/model-based-rl
+    export PYTHONPATH
     ```
     Source it with `source .mbrl_setup`.
 
