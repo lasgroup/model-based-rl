@@ -118,4 +118,4 @@ This is a normal warning when launching from the login node on Euler, since GPUs
 
 
 #### Segmentation Fault Error on Euler while Dynamics Training or Policy Evaluation
-No fix found yet.
+This is an error on the cluster. On Euler (Ubuntu), make sure you load the correct modules (`python` instead of `python_cuda`). 
