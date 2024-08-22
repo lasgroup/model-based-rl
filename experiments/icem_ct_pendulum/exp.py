@@ -19,7 +19,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
-               bnn_use_schedule: bool = False,
+               bnn_use_schedule: bool = True,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -71,9 +71,14 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     # Create the BNN num_training_steps schedule
     if bnn_use_schedule:
-        bnn_steps = optax.piecewise_constant_schedule(
-            init_value=int(bnn_steps/8),
-            boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
+        # bnn_steps = optax.piecewise_constant_schedule(
+        #     init_value=int(bnn_steps/8),
+        #     boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
+        # )
+        bnn_steps = optax.linear_schedule(
+            init_value=bnn_steps/10,
+            end_value=bnn_steps,
+            transition_steps=2000,
         )
 
     else:
@@ -371,17 +376,17 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=2000) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--icem_num_steps', type=int, default=20)
-    parser.add_argument('--icem_colored_noise_exponent', type=float, default=0.0)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
-    parser.add_argument('--bnn_steps', type=int, default=64_000)
-    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64_64')
+    parser.add_argument('--bnn_steps', type=int, default=48_000)
+    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='128_128')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
@@ -394,7 +399,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--log_mode', type=int, default=3)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)
