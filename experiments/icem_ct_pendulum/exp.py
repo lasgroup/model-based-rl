@@ -75,20 +75,20 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         #     init_value=int(bnn_steps/8),
         #     boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
         # )
-        bnn_steps = optax.linear_schedule(
+        bnn_schedule = optax.linear_schedule(
             init_value=bnn_steps/10,
             end_value=bnn_steps,
             transition_steps=2000,
         )
 
     else:
-        bnn_steps = optax.constant_schedule(bnn_steps)
+        bnn_schedule = optax.constant_schedule(bnn_steps)
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
             output_dim=env.observation_size,
-            num_training_steps=bnn_steps,
+            num_training_steps=bnn_schedule,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=bnn_features,
@@ -105,7 +105,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
             output_dim=env.observation_size,
-            num_training_steps=bnn_steps,
+            num_training_steps=bnn_schedule,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=bnn_features,
@@ -122,7 +122,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
             output_dim=env.observation_size,
-            num_training_steps=bnn_steps,
+            num_training_steps=bnn_schedule,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=bnn_features,
@@ -140,7 +140,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         model = BNNStatisticalModel(
             input_dim=env.observation_size + env.action_size,
             output_dim=env.observation_size,
-            num_training_steps=bnn_steps,
+            num_training_steps=bnn_schedule,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=beta * jnp.ones(shape=(env.observation_size,)),
             features=bnn_features,
