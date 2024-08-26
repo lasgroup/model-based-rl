@@ -15,7 +15,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                deterministic_policy_for_data_collection: bool = False,
                icem_num_steps: int = 10,
                icem_colored_noise_exponent: float = 3.0,
-               reward_source: str = 'dm-control',
+               reward_source: str = 'gym',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
@@ -56,7 +56,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
-    from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
+    from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from mbrl.utils.offline_data import SmootherPendulumOfflineData
     from diff_smoothers.smoother_net import SmootherNet
     
@@ -329,10 +329,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
 
-    base_agent = SmootherWrapper(agent_type=agent_class,
-                                 smoother_net=smoother_model,
-                                 state_data_source=state_data_source,
-                                 **agent_kwargs)
+    base_agent = DifferentiatingAgent(agent_type=agent_class,
+                                      smoother_net=smoother_model,
+                                      state_data_source=state_data_source,
+                                      **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
                                           start_from_scratch=True,
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
     parser.add_argument('--bnn_steps', type=int, default=48_000)
-    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='128_128')
+    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)

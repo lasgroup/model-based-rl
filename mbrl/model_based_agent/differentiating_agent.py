@@ -17,10 +17,7 @@ from diff_smoothers.data_functions.data_output import plot_derivative_data, plot
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
 from mbrl.utils.brax_utils import EnvInteractor
 
-# What is unclean about this implementation?
-# The agent has its own agent attribute (so self.agent is an agent in and of itself...)
-
-class SmootherWrapper(BaseAgentWrapper):
+class DifferentiatingAgent(BaseAgentWrapper):
     def __init__(self, agent_type,
                  smoother_net: SmootherNet,
                  state_data_source: str = 'smoother',

@@ -56,7 +56,7 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
-    from mbrl.model_based_agent.Smoother_Wrapper import SmootherWrapper
+    from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from mbrl.utils.offline_data import SmootherPendulumOfflineData
     from diff_smoothers.smoother_net import SmootherNet
     
@@ -368,10 +368,10 @@ def experiment(project_name: str = 'CT_Pendulum',
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
 
-    base_agent = SmootherWrapper(agent_type=agent_class,
-                                 smoother_net=smoother_model,
-                                 state_data_source='smoother',
-                                 **agent_kwargs)
+    base_agent = DifferentiatingAgent(agent_type=agent_class,
+                                      smoother_net=smoother_model,
+                                      state_data_source='smoother',
+                                      **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
                                           start_from_scratch=True,
