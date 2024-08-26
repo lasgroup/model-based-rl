@@ -5,7 +5,7 @@ general_configs = {
     'project_name': ['ICEM_Pendulum_Debug'],
     'num_offline_samples': [0, 200],
     'optimizer_horizon': [20],
-    'icem_num_steps': [10, 20, 40],
+    'icem_num_steps': [10, 20],
     'icem_colored_noise_exponent': [2.0],
     'reward_source': ['gym'],
     'seed': [42],
