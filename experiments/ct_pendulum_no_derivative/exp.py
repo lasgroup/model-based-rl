@@ -16,6 +16,7 @@ def experiment(project_name: str = 'CT_Pendulum',
                sac_horizon: int = 100,
                num_online_samples: int = 100,
                deterministic_policy_for_data_collection: bool = False,
+               reward_source: str = 'gym',
                seed: int = 42,
                num_episodes: int = 20,
                sac_steps: int = 500_000,
@@ -65,13 +66,18 @@ def experiment(project_name: str = 'CT_Pendulum',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
-    env = ContinuousPendulumEnv(reward_source='dm-control')
+    env = ContinuousPendulumEnv(reward_source=reward_source)
 
     # Create the BNN num_training_steps schedule
     if bnn_use_schedule:
-        bnn_schedule = optax.piecewise_constant_schedule(
-            init_value=int(bnn_steps/8),
-            boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
+        # bnn_steps = optax.piecewise_constant_schedule(
+        #     init_value=int(bnn_steps/8),
+        #     boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
+        # )
+        bnn_schedule = optax.linear_schedule(
+            init_value=bnn_steps/10,
+            end_value=bnn_steps,
+            transition_steps=2000,
         )
 
     else:
@@ -245,7 +251,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
 
-    class PendulumReward(Reward):
+    class DMPendulumReward(Reward):
         def __init__(self):
             super().__init__(x_dim=3, u_dim=1)
 
@@ -268,6 +274,37 @@ def experiment(project_name: str = 'CT_Pendulum',
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
+        
+    class GymPendulumReward(Reward):
+        def __init__(self):
+            super().__init__(x_dim=3, u_dim=1)
+
+        def __call__(self,
+                     x: chex.Array,
+                     u: chex.Array,
+                     reward_params: RewardParams,
+                     x_next: chex.Array | None = None
+                     ):
+            assert x.shape == (3,) and u.shape == (1,)
+            theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
+            target_angle = env.reward_params.target_angle
+            diff_th = theta - target_angle
+            diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
+            reward = -(env.reward_params.angle_cost * diff_th ** 2 +
+                        0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+            reward = reward.squeeze()
+            reward_dist = Normal(reward, jnp.zeros_like(reward))
+            return reward_dist, reward_params
+
+        def init_params(self, key: chex.PRNGKey) -> RewardParams:
+            return {'dt': env.dt}
+
+    if reward_source == 'dm-control':
+        reward_model = DMPendulumReward()
+    elif reward_source == 'gym':
+        reward_model = GymPendulumReward()
+    else:   
+        raise NotImplementedError(f'Unknown reward source {reward_source}')
 
     sac_learning_schedule = {
         first_episode_for_policy_training: int(sac_steps/16),
@@ -288,7 +325,7 @@ def experiment(project_name: str = 'CT_Pendulum',
         'statistical_model': model,
         'optimizer': optimizer,
         'episode_length': num_online_samples,
-        'reward_model': PendulumReward(),
+        'reward_model': reward_model,
         'offline_data': offline_data,
         'num_envs': 1,
         'num_eval_envs': 1,
@@ -348,6 +385,7 @@ def main(args):
                sac_horizon=args.sac_horizon,
                num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               reward_source=args.reward_source,
                seed=args.seed,
                num_episodes=args.num_episodes,
                sac_steps=args.sac_steps,
@@ -379,11 +417,12 @@ if __name__ == '__main__':
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
+    parser.add_argument('--reward_source', type=str, default='dm-control')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=30)
     parser.add_argument('--sac_steps', type=int, default=400_000)
-    parser.add_argument('--bnn_steps', type=int, default=64_000)
-    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='128_128_128')
+    parser.add_argument('--bnn_steps', type=int, default=48_000)
+    parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
@@ -391,7 +430,7 @@ if __name__ == '__main__':
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--smoother_steps', type=int, default=72_000)
+    parser.add_argument('--smoother_steps', type=int, default=48_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
