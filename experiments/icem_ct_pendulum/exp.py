@@ -13,6 +13,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                optimizer_horizon: int = 20,
                num_online_samples: int = 200,
                deterministic_policy_for_data_collection: bool = False,
+               noise_level: list = [0.1, 0.1],
                icem_num_steps: int = 10,
                icem_colored_noise_exponent: float = 3.0,
                reward_source: str = 'gym',
@@ -67,7 +68,11 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
 
-    env = ContinuousPendulumEnv(reward_source=reward_source)
+    env = ContinuousPendulumEnv(reward_source=reward_source,
+                                noise_level=jnp.array(noise_level),
+                                init_noise_key=jr.PRNGKey(12))
+    
+    eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
     # Create the BNN num_training_steps schedule
     if bnn_use_schedule:
@@ -167,9 +172,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     smoother_model = SmootherNet(input_dim=1,
                             output_dim=env.observation_size,
-                            output_stds=jnp.ones(shape=(env.observation_size,)) * 0.001,
+                            output_stds=jnp.ones(shape=(env.observation_size,)) * 0.1,
                             logging_wandb=False,
-                            beta=jnp.ones(shape=(env.observation_size,))*3,
+                            beta=jnp.ones(shape=(env.observation_size,))*2,
                             num_particles=5,
                             features=smoother_features,
                             bnn_type=DeterministicEnsemble,
@@ -281,7 +286,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     
     agent_kwargs = {
         'env': env,
-        'eval_env': env,
+        'eval_env': eval_env,
         'statistical_model': model,
         'optimizer': optimizer,
         'episode_length': num_online_samples,
@@ -302,6 +307,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   sample_horizon=num_online_samples,
                   optimizer_horizon=optimizer_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  noise_level=noise_level,
                   icem_num_steps=icem_num_steps,
                   icem_colored_noise_exponent=icem_colored_noise_exponent,
                   reward_source=reward_source,
@@ -346,6 +352,7 @@ def main(args):
                optimizer_horizon=args.optimizer_horizon,
                num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               noise_level=args.noise_level,
                icem_num_steps=args.icem_num_steps,
                icem_colored_noise_exponent=args.icem_colored_noise_exponent,
                reward_source=args.reward_source,
@@ -374,13 +381,17 @@ if __name__ == '__main__':
     def underscore_to_tuple(value: str):
         return tuple(map(int, value.split('_')))
     
+    def underscore_to_list(value: str):
+        return list(map(float, value.split('_')))
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
     parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
-    parser.add_argument('--icem_num_steps', type=int, default=20)
+    parser.add_argument('--noise_level', type=underscore_to_list, default='0.1_0.1')
+    parser.add_argument('--icem_num_steps', type=int, default=5)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
@@ -397,7 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_steps', type=int, default=48_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
-    parser.add_argument('--smoother_weight_decay', type=float, default=0.0)
+    parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
     parser.add_argument('--log_mode', type=int, default=2)
 
