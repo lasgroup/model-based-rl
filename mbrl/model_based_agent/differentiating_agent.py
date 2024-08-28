@@ -12,19 +12,19 @@ from brax.training.replay_buffers import UniformSamplingQueue, ReplayBufferState
 from bsm.utils.normalization import Data
 from bsm.utils import StatisticalModelState
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
-from diff_smoothers.smoother_net import SmootherNet
+from diff_smoothers.Base_Differentiator import BaseDifferentiator
 from diff_smoothers.data_functions.data_output import plot_derivative_data, plot_data
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
 from mbrl.utils.brax_utils import EnvInteractor
 
 class DifferentiatingAgent(BaseAgentWrapper):
     def __init__(self, agent_type,
-                 smoother_net: SmootherNet,
+                 differentiator: BaseDifferentiator,
                  state_data_source: str = 'smoother',
                  **kwargs):
         super().__init__(agent_type, **kwargs)
         self.state_data_source = state_data_source
-        self.smoother_model = smoother_net
+        self.differentiator = differentiator
         
         if self.log_mode > 0:
             wandb.define_metric("dynamics_model/data", summary="min")
@@ -145,16 +145,16 @@ class DifferentiatingAgent(BaseAgentWrapper):
         outputs = longest_trajectory.observation
         data = Data(inputs, outputs)
         # Get dx from Smoother
-        model_states = self.smoother_model.train_new_smoother(key, data)
-        pred_x = self.smoother_model.predict_batch(inputs, model_states)
-        ders = self.smoother_model.derivative_batch(inputs, model_states)
+        differentiator_state = self.differentiator.train(key, data)
+        differentiator_state, pred_x = self.differentiator.predict(differentiator_state, inputs)
+        differentiator_state, ders = self.differentiator.differentiate(differentiator_state, inputs)
 
         # Log the smoother performance to wandb as a plot
         if self.log_mode > 1:
-            fig, _ = self.smoother_model.plot_fit(inputs=inputs,
-                                                  pred_x=pred_x.mean,
+            fig, _ = self.differentiator.plot_fit(true_t=inputs,
+                                                  pred_x=pred_x,
                                                   true_x=outputs,
-                                                  pred_x_dot=ders.mean,
+                                                  pred_x_dot=ders,
                                                   true_x_dot=true_dx,
                                                   state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
             wandb.log({'smoother/fit': wandb.Image(fig)})
@@ -163,14 +163,14 @@ class DifferentiatingAgent(BaseAgentWrapper):
         # Use the smoothed trajectory in the transitions
         if self.state_data_source == 'smoother':
             transition = Transition(
-                observation=pred_x.mean,
+                observation=pred_x,
                 action=longest_trajectory.action,
                 reward=longest_trajectory.reward,
                 discount=longest_trajectory.discount,
                 next_observation=longest_trajectory.next_observation,
                 extras={'state_extras': {'t': longest_trajectory.extras['state_extras']['t'],
                                          'true_derivative': longest_trajectory.extras['state_extras']['derivative'],
-                                         'derivative': ders.mean,
+                                         'derivative': ders,
                                          'dt': longest_trajectory.extras['state_extras']['dt']}}
             )
         elif self.state_data_source == 'true':
@@ -194,7 +194,7 @@ class DifferentiatingAgent(BaseAgentWrapper):
                 next_observation=longest_trajectory.next_observation,
                 extras={'state_extras': {'t': longest_trajectory.extras['state_extras']['t'],
                                          'true_derivative': longest_trajectory.extras['state_extras']['derivative'],
-                                         'derivative': ders.mean,
+                                         'derivative': ders,
                                          'dt': longest_trajectory.extras['state_extras']['dt']}}
             )
         return transition

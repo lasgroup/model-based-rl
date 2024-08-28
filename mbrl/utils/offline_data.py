@@ -14,7 +14,7 @@ from mbrl.envs.pendulum import PendulumEnv
 from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost, AugmentedPipelineState
 
-from diff_smoothers.smoother_net import SmootherNet
+from diff_smoothers.Base_Differentiator import BaseDifferentiator
 from diff_smoothers.data_functions.data_creation import create_random_control_sequence
 from diff_smoothers.data_functions.data_output import plot_data
 from bsm.utils.normalization import Data
@@ -98,13 +98,13 @@ class PendulumOfflineData(OfflineData):
         actions = jr.uniform(key, shape=(num_samples, 1), minval=-1, maxval=1)
         return actions
 
-class SmootherPendulumOfflineData(OfflineData):
+class DifferentiatorPendulumOfflineData(OfflineData):
 
     def __init__(self,
-                 smoother_net: SmootherNet,
+                 differentiator: BaseDifferentiator,
                  state_data_source: str = 'smoother'):
         super().__init__(env=ContinuousPendulumEnv(reward_source='dm-control'))
-        self.smoother_net = smoother_net
+        self.differentiator = differentiator
         self.state_data_source = state_data_source
 
     def _sample_states(self,
@@ -153,7 +153,7 @@ class SmootherPendulumOfflineData(OfflineData):
         next_states = vmap(run_full_sim, in_axes=(0,0))(init_states, colored_actions)
         states = jnp.concatenate([init_states.reshape(num_trajectories, 1, -1), next_states.obs[:,:-1,:]], axis=1)
 
-        # Fit the smoothers
+        # Fit the differentiator
         if plot_results:
             fig = plot_data(t=jnp.tile(jnp.arange(0, 0 + 0.05*trajectory_length, 0.05), (num_trajectories, 1)).reshape(num_trajectories, -1, 1),
                             x=states,
@@ -164,21 +164,21 @@ class SmootherPendulumOfflineData(OfflineData):
                 os.makedirs('./results/offline_data')
             plt.savefig('./results/offline_data/colored_data.png')
             plt.close(fig)
-        smoother_keys = jr.split(key, num_trajectories)
+        differentiator_keys = jr.split(key, num_trajectories)
         smoothed_state = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
         smoothed_derivative = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
         for k01 in range(num_trajectories):
             data = Data(inputs=jnp.arange(0, 0 + 0.05*trajectory_length, 0.05).reshape(-1,1), outputs=states[k01,:,:])
-            model_states = self.smoother_net.train_new_smoother(smoother_keys[k01], data=data)
-            pred_x = self.smoother_net.predict_batch(data.inputs, model_states)
-            pred_x_dot = self.smoother_net.derivative_batch(data.inputs, model_states)
-            smoothed_state = smoothed_state.at[k01, :, :].set(pred_x.mean)
-            smoothed_derivative = smoothed_derivative.at[k01, :, :].set(pred_x_dot.mean)
+            differentiator_state = self.differentiator.train(key=differentiator_keys[k01], data=data)
+            differentiator_state, pred_x = self.differentiator.predict(state=differentiator_state, t=data.inputs)
+            differentiator_state, pred_x_dot = self.differentiator.differentiate(state=differentiator_state, t=data.inputs)
+            smoothed_state = smoothed_state.at[k01, :, :].set(pred_x)
+            smoothed_derivative = smoothed_derivative.at[k01, :, :].set(pred_x_dot)
             if plot_results:
-                fig, _ = self.smoother_net.plot_fit(inputs=data.inputs,
-                                                  pred_x=pred_x.mean,
+                fig, _ = self.differentiator.plot_fit(inputs=data.inputs,
+                                                  pred_x=pred_x,
                                                   true_x=data.outputs,
-                                                  pred_x_dot=pred_x_dot.mean,
+                                                  pred_x_dot=pred_x_dot,
                                                   true_x_dot=next_states.info['derivative'][k01,:,:],
                                                   state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
                 if not os.path.exists('./results/offline_data'):

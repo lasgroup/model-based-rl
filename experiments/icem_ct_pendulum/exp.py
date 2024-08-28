@@ -58,8 +58,8 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
-    from mbrl.utils.offline_data import SmootherPendulumOfflineData
-    from diff_smoothers.smoother_net import SmootherNet
+    from mbrl.utils.offline_data import DifferentiatorPendulumOfflineData
+    from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
     
     jax.config.update('jax_enable_x64', True)
 
@@ -170,22 +170,20 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     discount_factor = 0.99
 
-    smoother_model = SmootherNet(input_dim=1,
-                            output_dim=env.observation_size,
-                            output_stds=jnp.ones(shape=(env.observation_size,)) * 0.1,
-                            logging_wandb=False,
-                            beta=jnp.ones(shape=(env.observation_size,))*2,
-                            num_particles=5,
-                            features=smoother_features,
-                            bnn_type=DeterministicEnsemble,
-                            train_share=smoother_train_share,
-                            num_training_steps=smoother_steps,
-                            weight_decay=smoother_weight_decay,
-                            return_best_model=True,
-                            eval_frequency=1_000,
-                            )
+    BNN_Differentiator = BNNSmootherDifferentiator(state_dim=env.observation_size,
+                                               output_stds=jnp.ones(shape=(env.observation_size,)) * 0.1,
+                                               logging_wandb=False,
+                                               beta=jnp.ones(shape=(env.observation_size,))*2,
+                                               num_particles=5,
+                                               features=smoother_features,
+                                               bnn_type=DeterministicEnsemble,
+                                               train_share=smoother_train_share,
+                                               num_training_steps=smoother_steps,
+                                               weight_decay=smoother_weight_decay,
+                                               return_best_model=True,
+                                               eval_frequency=1_000,)
 
-    offline_data_gen = SmootherPendulumOfflineData(smoother_net=smoother_model)
+    offline_data_gen = DifferentiatorPendulumOfflineData(differentiator=BNN_Differentiator)
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
     if num_offline_samples > 0:
         offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
@@ -336,7 +334,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                    config=config)
 
     base_agent = DifferentiatingAgent(agent_type=agent_class,
-                                      smoother_net=smoother_model,
+                                      differentiator=BNN_Differentiator,
                                       state_data_source=state_data_source,
                                       **agent_kwargs)
 
