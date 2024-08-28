@@ -11,6 +11,8 @@ general_configs = {
     'num_episodes': [20],
     'bnn_steps': [48_000],
     'bnn_features': ['64_64'],
+    'smoother_steps': [32_000, 48_000, 64_000],
+    'smoother_features': ['64_64', '128_128', '64_64_64'],
     'exploration': ['pets', 'optimistic'],
     'reset_statistical_model': [1],
     'regression_model': ['probabilistic_ensemble'],
@@ -30,7 +32,7 @@ def main():
     generate_run_commands(command_list,
                           num_cpus=1,
                           num_gpus=1,
-                          mode='local',
+                          mode='euler',
                           duration='23:59:00',
                           prompt=True,
                           mem=16000)
