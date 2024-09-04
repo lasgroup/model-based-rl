@@ -49,6 +49,8 @@ class ContinuousPendulumEnv(Env):
         self.reward_source = reward_source  # 'dm-control' or 'gym'
         self.noise_level = noise_level      # Noise level can have one value (for both angle and speed) or two separate values
         self.init_noise_key = init_noise_key
+        self.state_labels = [r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$']
+        self.state_derivative_labels = [r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$']
         self.tolerance_reward = ToleranceReward(bounds=(0.0, bound),
                                                 margin=margin_factor * bound,
                                                 value_at_margin=value_at_margin,
@@ -102,7 +104,7 @@ class ContinuousPendulumEnv(Env):
         dt = self.dynamics_params.dt
         x_compressed = jnp.array([th, thdot])
         dx_compressed = self.ode(x_compressed, action)
-        newth = th + dx_compressed[0] * dt
+        newth = th + thdot.reshape(-1,)*dt #dx_compressed[0] * dt
         newthdot = thdot + dx_compressed[-1] * dt # Compute dx with this?
         newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed) # == dx_compressed[0]
         dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, (newthdot - thdot)/dt]).reshape(-1)

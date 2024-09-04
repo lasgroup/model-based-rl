@@ -55,6 +55,7 @@ class BaseModelBasedAgent(ABC):
                  first_episode_for_policy_training: int = -1,
                  save_trajectory_transitions: bool = False,
                  dt: float = 0.05,
+                 dynamics_dt: float = 0.05,
                  state_extras_ref: dict = {},
                  actor_learning_schedule: dict | None = None,
                  log_to_wandb: bool = False,
@@ -78,6 +79,7 @@ class BaseModelBasedAgent(ABC):
         self.first_episode_for_policy_training = first_episode_for_policy_training
         self.save_trajectory_transitions = save_trajectory_transitions
         self.dt = dt
+        self.dynamics_dt = dynamics_dt
         self.state_extras_ref = state_extras_ref
         self.actor_learning_schedule = actor_learning_schedule
         if self.actor_learning_schedule:
@@ -265,7 +267,7 @@ class BaseModelBasedAgent(ABC):
             initial_model_output = self.statistical_model(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
             x_dot_est = x_dot_est.at[0,:].set(initial_model_output.mean.squeeze())
             for i in range(1, len(data.extras['state_extras']['t'])):
-                new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dt
+                new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dynamics_dt
                 x_est = x_est.at[i,:].set(new_x_est.squeeze())
                 model_outputs = self.statistical_model(jnp.concatenate([x_est[i,:], data.action[i,:].reshape(-1,)]),
                                                                 agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
@@ -276,6 +278,7 @@ class BaseModelBasedAgent(ABC):
                                        x_est=x_est,
                                        x_est_std=jnp.zeros_like(x_est),
                                        beta=jnp.zeros((data.observation.shape[-1])),
+                                       state_labels=self.env.state_labels,
                                        source='dyn.model')
             wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
             plt.close(fig)
@@ -290,7 +293,7 @@ class BaseModelBasedAgent(ABC):
                                        source='Dyn. Model',
                                        beta = pred_dx.statistical_model_state.beta,
                                        num_trajectory_to_plot=-1,
-                                       state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
+                                       state_labels=self.env.state_derivative_labels,
                                        )
             wandb.log({'eval_true_env/dyn_model_derivative': wandb.Image(fig)})
             plt.close(fig)

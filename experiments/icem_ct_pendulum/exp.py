@@ -28,6 +28,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
+               bnn_dt: float = 0.05,
                beta: float = 2.0,
                smoother_steps: int = 16_000,
                smoother_features: tuple = (64, 64),
@@ -81,7 +82,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         #     boundaries_and_scales={500: 2, 1_000: 2, 2_000: 2},
         # )
         bnn_schedule = optax.linear_schedule(
-            init_value=bnn_steps/10,
+            init_value=bnn_steps/4,
             end_value=bnn_steps,
             transition_steps=2000,
         )
@@ -298,6 +299,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         'predict_difference': False,
         'reset_statistical_model': reset_statistical_model,
         'dt': env.dt,
+        'dynamics_dt': bnn_dt,
         'state_extras_ref': state_extras,
     }
 
@@ -320,6 +322,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
                   beta=beta,
+                  bnn_dt = bnn_dt,
                   smoother_steps=smoother_steps,
                   smoother_features=smoother_features,
                   smoother_train_share=smoother_train_share,
@@ -365,6 +368,7 @@ def main(args):
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
                beta=args.beta,
+               bnn_dt=args.bnn_dt,
                smoother_steps=args.smoother_steps,
                smoother_features=args.smoother_features,
                smoother_train_share=args.smoother_train_share,
@@ -388,7 +392,7 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
-    parser.add_argument('--noise_level', type=underscore_to_list, default='0.1_0.1')
+    parser.add_argument('--noise_level', type=underscore_to_list, default='0.05_0.1')
     parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
@@ -399,10 +403,11 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
-    parser.add_argument('--exploration', type=str, default='optimistic')
+    parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
+    parser.add_argument('--bnn_dt', type=float, default=0.05)
     parser.add_argument('--smoother_steps', type=int, default=48_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)

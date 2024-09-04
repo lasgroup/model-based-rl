@@ -82,7 +82,8 @@ class DifferentiatingAgent(BaseAgentWrapper):
                                x=log_data['x'],
                                u=log_data['u'],
                                x_dot=log_data['x_dot_est'],
-                               title='Data used for training the dynamics model')
+                               title='Data used for training the dynamics model',
+                               state_labels=self.env.state_labels)
             wandb.log({'dynamics_model/data': wandb.Image(fig)})
             plt.close(fig)
             # Plot the training performance of the dynamics model
@@ -97,7 +98,7 @@ class DifferentiatingAgent(BaseAgentWrapper):
                                        x_dot_smoother=log_data['x_dot_est'],
                                        beta = pred_dx.statistical_model_state.beta,
                                        num_trajectory_to_plot=-1,
-                                       state_labels=[r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$'],
+                                       state_labels=self.env.state_derivative_labels,
                                        )
             wandb.log({'dynamics_model/fit': wandb.Image(fig)})
             plt.close(fig)
@@ -156,7 +157,7 @@ class DifferentiatingAgent(BaseAgentWrapper):
                                                   true_x=outputs,
                                                   pred_x_dot=ders,
                                                   true_x_dot=true_dx,
-                                                  state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
+                                                  state_labels=self.env.state_labels)
             wandb.log({'smoother/fit': wandb.Image(fig)})
             plt.close(fig)
 
