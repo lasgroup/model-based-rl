@@ -373,7 +373,7 @@ if __name__ == '__main__':
         return list(map(float, value.split('_')))
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='ICEM_Cartpole_Debug')
+    parser.add_argument('--project_name', type=str, default='ICEM_RCCar_Debug')
     parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=50)
     parser.add_argument('--num_online_samples', type=int, default=100)

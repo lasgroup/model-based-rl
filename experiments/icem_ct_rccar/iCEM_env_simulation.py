@@ -69,8 +69,8 @@ def rollout_actions(
 if __name__ == '__main__':
 
     opt_params = iCemParams(
-        num_particles=10,
-        num_samples=10_000,
+        num_particles=5,
+        num_samples=1000,
         num_elites=100,
         num_steps=10,
         exponent=1.0,)
