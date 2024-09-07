@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_RCCar_Sweep_0904'],
+    'project_name': ['ICEM_Bicycle_Debug'],
     'num_offline_samples': [0],
     'optimizer_horizon': [30, 50, 70],
     'icem_num_steps': [10, 20, 40],
