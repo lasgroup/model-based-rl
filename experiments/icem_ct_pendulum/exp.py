@@ -388,7 +388,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=2000) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=20)
+    parser.add_argument('--num_episodes', type=int, default=2)
     parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)

@@ -7,7 +7,7 @@ from brax.envs.base import State, Env
 import chex
 import copy
 
-from mbrl.envs.rccar_utils import RaceCar, RCCarEnvReward, RCCarDynamicsParams, encode_angles
+from mbrl.utils.rccar_utils import RaceCar, RCCarEnvReward, RCCarDynamicsParams, encode_angles
 
 OBS_NOISE_STD_SIM_CAR: jnp.array = 0.1 * jnp.exp(jnp.array([-4.5, -4.5, -4., -2.5, -2.5, -1.]))
 
@@ -246,7 +246,7 @@ class RCCarSimEnv(Env):
         return 'positional'
 
     def _set_car_params(self):
-        from mbrl.envs.rccar_utils import (DEFAULT_PARAMS_BICYCLE_CAR1, DEFAULT_PARAMS_BLEND_CAR1,
+        from mbrl.utils.rccar_utils import (DEFAULT_PARAMS_BICYCLE_CAR1, DEFAULT_PARAMS_BLEND_CAR1,
                                                       DEFAULT_PARAMS_BICYCLE_CAR2, DEFAULT_PARAMS_BLEND_CAR2)
         if self.car_id == 1:
             self._default_car_model_params_bicycle: Dict = DEFAULT_PARAMS_BICYCLE_CAR1

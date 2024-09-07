@@ -13,7 +13,7 @@ from brax.training.types import Transition
 from mbpo.systems import System, SystemParams
 from mbpo.optimizers.trajectory_optimizers.icem_optimizer import iCemTO, iCemParams
 
-from mbrl.envs.rccar import RCCarSimEnv
+from mbrl.envs.bicyclecar import BicycleEnv
 
 # Create a system class to wrap the environment
 class EnvSystem:
@@ -73,7 +73,7 @@ if __name__ == '__main__':
         num_samples=1000,
         num_elites=100,
         num_steps=10,
-        exponent=1.0,)
+        exponent=5.0,)
     
     optimizer = iCemTO(horizon=50,
                        action_dim=2,
@@ -81,10 +81,7 @@ if __name__ == '__main__':
                        opt_params=opt_params,
                        rollout_function=rollout_actions,)
     
-    env = RCCarSimEnv(encode_angle=True,
-                      use_obs_noise=False,
-                      use_tire_model=True,
-                      margin_factor=20.0)
+    env = BicycleEnv(use_obs_noise=False)
     system = EnvSystem(env)
 
     optimizer.set_system(system)

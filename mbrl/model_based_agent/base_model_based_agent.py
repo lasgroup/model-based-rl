@@ -22,7 +22,7 @@ from mbpo.utils.type_aliases import OptimizerState
 
 from mbrl.model_based_agent.optimizer_wrapper import Actor
 from mbrl.utils.brax_utils import EnvInteractor
-from diff_smoothers.data_functions.data_output import plot_prediction_data, plot_derivative_data
+from diff_smoothers.data_functions.data_output import plot_prediction_data, plot_derivative_data, plot_data_reward
 from matplotlib import pyplot as plt
 
 @chex.dataclass
@@ -297,6 +297,16 @@ class BaseModelBasedAgent(ABC):
                                        )
             wandb.log({'eval_true_env/dyn_model_derivative': wandb.Image(fig)})
             plt.close(fig)
+            # Plot the actual actions and observations
+            fig = plot_data_reward(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                                   x=data.observation.reshape(-1, data.observation.shape[-1]),
+                                   reward=data.reward.reshape(-1, 1),
+                                   u=data.action.reshape(-1, data.action.shape[-1]),
+                                   title='Evaluation on True Env',
+                                   state_labels=self.env.state_labels,)
+            wandb.log({'eval_true_env/evaluation_data': wandb.Image(fig)})
+            plt.close(fig)
+
         if self.log_mode > 0:
             wandb.log(metrics | {'episode_idx': episode_idx})
         else:

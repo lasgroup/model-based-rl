@@ -26,13 +26,14 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
-               bnn_dt: float = 0.05,
+               bnn_dt: float | None = None,
                beta: float = 2.0,
                smoother_steps: int = 16_000,
                smoother_features: tuple = (64, 64),
                smoother_train_share: float = 1.0,
                smoother_weight_decay: float = 1e-4,
                state_data_source: str = 'smoother',
+               measurement_dt_ratio: int = 1,
                log_mode: int = 2,
                ):
     
@@ -55,8 +56,8 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     from mbpo.optimizers.trajectory_optimizers.icem_optimizer import iCemParams
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
-    from mbrl.envs.rccar import RCCarSimEnv
-    from mbrl.envs.rccar_utils import decode_angles
+    from mbrl.envs.bicyclecar import BicycleEnv
+    from mbrl.utils.bicyclecar_utils import BicycleCarReward
     from mbrl.utils.tolerance_reward import ToleranceReward
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
@@ -68,12 +69,9 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
 
-    env = RCCarSimEnv(encode_angle=True,
-                      use_tire_model=True)
+    env = BicycleEnv(init_noise_key=jr.PRNGKey(seed))
     
-    eval_env = RCCarSimEnv(encode_angle=True,
-                           use_tire_model=True,
-                           use_obs_noise=False)
+    eval_env = BicycleEnv(use_obs_noise=False)
 
     # Create the BNN num_training_steps schedule
     if bnn_use_schedule:
@@ -185,7 +183,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                                                eval_frequency=1_000,)
 
     if num_offline_samples > 0:
-        raise NotImplementedError('Offline data generation not implemented for cartpole')
+        raise NotImplementedError('Offline data generation not implemented for rccar')
     offline_data = None
 
     max_replay_size_true_data_buffer = 10 ** 4
@@ -208,7 +206,9 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
 
     opt_params = iCemParams(
         num_steps=icem_num_steps,
-        num_elites=1_000,
+        num_elites=100,
+        num_samples=1000,
+        num_particles=5,
         exponent=icem_colored_noise_exponent,
         )
     
@@ -223,54 +223,26 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
         
-    class RCCarEnvReward(Reward):
-        _angle_idx: int = 2
-        dim_action: Tuple[int] = (2,)
 
-        def __init__(self, goal: jnp.array, encode_angle: bool = False, ctrl_cost_weight: float = 0.005,
-                    bound: float = 0.1, margin_factor: float = 10.0):
-            super().__init__(x_dim=env.dim_state[0], u_dim=2)
-            self.goal = goal
-            self.ctrl_cost_weight = ctrl_cost_weight
-            self.encode_angle = encode_angle
-            # Margin 20 seems to work even better (maybe try at some point)
-            self.tolerance_reward = ToleranceReward(bounds=(0.0, bound), margin=margin_factor * bound,
-                                                    value_at_margin=0.1, sigmoid='long_tail')
-
+    class BicycleCarEnvReward(BicycleCarReward):
+        def __init__(self, action_cost: float = 0.0):
+            super().__init__(goal = env.goal,
+                             action_cost = action_cost,)
+            
         def __call__(self,
                      x: chex.Array,
                      u: chex.Array,
                      reward_params: RewardParams,
                      x_next: chex.Array | None = None):
             """ Computes the reward for the given transition """
-            reward_ctrl = self.action_reward(u)
-            reward_state = self.state_reward(x, x_next)
-            reward = reward_state + self.ctrl_cost_weight * reward_ctrl
+            reward = self.predict(x, u)
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
-
-        @staticmethod
-        def action_reward(action: jnp.array) -> jnp.array:
-            """ Computes the reward/penalty for the given action """
-            return - (action ** 2).sum(-1)
-
-        def state_reward(self, obs: jnp.array, next_obs: jnp.array) -> jnp.array:
-            """ Computes the reward for the given observations """
-            if self.encode_angle:
-                next_obs = decode_angles(next_obs, angle_idx=self._angle_idx)
-            pos_diff = next_obs[..., :2] - self.goal[:2]
-            theta_diff = next_obs[..., 2] - self.goal[2]
-            pos_dist = jnp.sqrt(jnp.sum(jnp.square(pos_diff), axis=-1))
-            theta_dist = jnp.abs(((theta_diff + jnp.pi) % (2 * jnp.pi)) - jnp.pi)
-            total_dist = jnp.sqrt(pos_dist ** 2 + theta_dist ** 2)
-            reward = self.tolerance_reward(total_dist)
-            return reward
         
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
-    reward_model = RCCarEnvReward(goal=jnp.array([0.0, 0.0, 0.0]),
-                                  encode_angle=True)
+    reward_model = BicycleCarEnvReward()
     
     agent_kwargs = {
         'env': env,
@@ -288,7 +260,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
         'predict_difference': False,
         'reset_statistical_model': reset_statistical_model,
         'dt': env.dt,
-        'dynamics_dt': bnn_dt,
+        'dynamics_dt': bnn_dt if bnn_dt is not None else env.dt,
         'state_extras_ref': state_extras,
     }
 
@@ -316,6 +288,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                   smoother_weight_decay=smoother_weight_decay,
                   state_data_source=state_data_source,
                   agent_kwargs=agent_kwargs,
+                  measurement_dt_ratio=measurement_dt_ratio,
                   )
     
     if log_mode > 0:
@@ -326,6 +299,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     base_agent = DifferentiatingAgent(agent_type=agent_class,
                                       differentiator=BNN_Differentiator,
                                       state_data_source=state_data_source,
+                                      measurement_dt_ratio=measurement_dt_ratio,
                                       **agent_kwargs)
 
     key_agent = jr.PRNGKey(seed)
@@ -354,12 +328,12 @@ def main(args):
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
                beta=args.beta,
-               bnn_dt=args.bnn_dt,
                smoother_steps=args.smoother_steps,
                smoother_features=args.smoother_features,
                smoother_train_share=args.smoother_train_share,
                smoother_weight_decay=args.smoother_weight_decay,
                state_data_source=args.state_data_source,
+               measurement_dt_ratio=args.measurement_dt_ratio,
                log_mode=args.log_mode,
                )
 
@@ -391,13 +365,13 @@ if __name__ == '__main__':
     parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
-    parser.add_argument('--bnn_dt', type=float, default=0.05)
     parser.add_argument('--smoother_steps', type=int, default=48_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--log_mode', type=int, default=0)
+    parser.add_argument('--measurement_dt_ratio', type=int, default=2)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)

@@ -139,8 +139,9 @@ class DifferentiatorPendulumOfflineData(OfflineData):
         def run_full_sim(init_state, colored_action):
             first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
-                            'dt': jnp.array(self.env.dynamics_params.dt)}
-            brax_state = State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
+                            'dt': jnp.array(self.env.dynamics_params.dt),
+                            'noise_key': self.env.init_noise_key}
+            brax_state = State(pipeline_state=jnp.array([-1.0, 0.0, 0.0]),
                      obs=init_state,
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0),

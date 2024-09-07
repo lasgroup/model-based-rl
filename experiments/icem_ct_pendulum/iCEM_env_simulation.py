@@ -72,7 +72,7 @@ if __name__ == '__main__':
         num_particles=10,
         num_samples=500,
         num_elites=50,
-        num_steps=100,
+        num_steps=10,
         exponent=2.0,)
     
     optimizer = iCemTO(horizon=20,
@@ -81,7 +81,7 @@ if __name__ == '__main__':
                        opt_params=opt_params,
                        rollout_function=rollout_actions,)
     
-    env = ContinuousPendulumEnv(reward_source='dm-control')
+    env = ContinuousPendulumEnv(reward_source='gym')
     system = EnvSystem(env)
 
     optimizer.set_system(system)

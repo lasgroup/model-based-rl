@@ -21,10 +21,23 @@ class DifferentiatingAgent(BaseAgentWrapper):
     def __init__(self, agent_type,
                  differentiator: BaseDifferentiator,
                  state_data_source: str = 'smoother',
+                 measurement_dt_ratio: int = 1,
                  **kwargs):
+        """Agent that uses a differentiator to estimate the state derivatives.
+        Args:
+            agent_type: Type of the agent to be wrapped (has to inherit from BaseAgent)
+            differentiator: Differentiator to estimate the state derivatives (from diff-smoothers library)
+            state_data_source: Source of the state data for the agent
+                    - 'smoother':   the x and x_dot from the smoother are used in the transitions
+                    - 'true':       the true x and x_dot are used in the transitions
+                    - 'both':       the true x and the smoother x_dot are used in the transitions
+            measurement_dt_ratio: Ratio of the measurement dt to the system dt, resamples the transitions
+            **kwargs: Keyword arguments for the agent
+        """
         super().__init__(agent_type, **kwargs)
         self.state_data_source = state_data_source
         self.differentiator = differentiator
+        self.measurement_dt_ratio = measurement_dt_ratio
         
         if self.log_mode > 0:
             wandb.define_metric("dynamics_model/data", summary="min")
@@ -141,6 +154,11 @@ class DifferentiatingAgent(BaseAgentWrapper):
         trajectories = self._split_transitions(transitions, indices)
         # Fit Smoother for each trajectory (or only on longest one)
         longest_trajectory = max(trajectories, key=lambda x: len(x.observation))
+        # Resample the trajectories based on the measurement_dt_ratio
+        if self.measurement_dt_ratio > 1:
+            indices = range(0, len(longest_trajectory.observation), self.measurement_dt_ratio)
+            trajectories = self._resample_trajectories(longest_trajectory, indices)
+        # Prepare the data for the differentiator
         inputs = longest_trajectory.extras['state_extras']['t'].reshape(-1, 1)
         true_dx = longest_trajectory.extras['state_extras']['derivative'].reshape(-1, self.env.observation_size)
         outputs = longest_trajectory.observation
@@ -186,7 +204,7 @@ class DifferentiatingAgent(BaseAgentWrapper):
                                          'derivative': longest_trajectory.extras['state_extras']['derivative'],
                                          'dt': longest_trajectory.extras['state_extras']['dt']}}
             )
-        else:
+        elif self.state_data_source == 'both':
             transition = Transition(
                 observation=longest_trajectory.observation,
                 action=longest_trajectory.action,
@@ -198,6 +216,8 @@ class DifferentiatingAgent(BaseAgentWrapper):
                                          'derivative': ders,
                                          'dt': longest_trajectory.extras['state_extras']['dt']}}
             )
+        else:
+            raise ValueError(f"Unknown state_data_source {self.state_data_source}")
         return transition
 
     def _split_transitions(self,
@@ -237,4 +257,39 @@ class DifferentiatingAgent(BaseAgentWrapper):
             next_observation=next_observations[-1],
             extras={'state_extras': {key: value[-1] for key, value in state_extras.items()}}
         ))
+        return trajectories
+    
+    def _resample_trajectories(self,
+                              transition: Transition,
+                              indices: list[int],
+                              ) -> list[Transition]:
+        # Ensure indices are sorted and unique
+        indices = sorted(set(indices))
+        indices = jnp.asarray(indices)
+        # Resample the separate parts
+        observations = transition.observation.take(indices[:-1], axis=0)
+        actions = transition.action.take(indices[:-1], axis=0)
+        rewards = transition.reward.take(indices[:-1], axis=0)
+        discounts = transition.discount.take(indices[:-1], axis=0)
+        # Make sure to take the correct next observations
+        next_observations = transition.observation.take(indices[1:], axis=0)
+        # Resample all entries in 'state_extras'
+        state_extras = {}
+        for key, value in transition.extras['state_extras'].items():
+            if isinstance(value, jnp.ndarray):
+                if key == 'dt':
+                    state_extras[key] = jnp.diff(transition.extras['state_extras']['t'].take(indices))
+                else:
+                    state_extras[key] = value.take(indices[:-1], axis=0)
+
+        trajectories = []
+        for i in range(len(indices)):
+            trajectories.append(Transition(
+                observation=observations[i],
+                action=actions[i],
+                reward=rewards[i],
+                discount=discounts[i],
+                next_observation=next_observations[i],
+                extras={'state_extras': {key: value[i] for key, value in state_extras.items()}}
+            ))
         return trajectories
