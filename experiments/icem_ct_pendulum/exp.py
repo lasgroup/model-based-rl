@@ -35,12 +35,14 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                smoother_train_share: float = 1.0,
                smoother_weight_decay: float = 1e-4,
                state_data_source: str = 'smoother',
+               measurement_dt_ratio: int = 1,
                log_mode: int = 2,
                ):
     
     import chex
     import jax
     import jax.numpy as jnp
+    import numpy as np
     import jax.random as jr
     import optax
     import wandb
@@ -86,7 +88,6 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
             end_value=bnn_steps,
             transition_steps=2000,
         )
-
     else:
         bnn_schedule = optax.constant_schedule(bnn_steps)
 
@@ -193,9 +194,16 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
                                                            num_samples=num_offline_samples,
                                                            trajectory_length=num_online_samples,
-                                                           plot_results=log_mode > 3)
+                                                           plot_results=log_mode > 3,
+                                                           measurement_dt_ratio=measurement_dt_ratio,
+                                                           state_data_source=state_data_source)
     else:
         offline_data = None
+
+
+    np.save('results/pendulum_offline_data.npy', offline_data)
+    
+    loaded_transitions = np.load('results/pendulum_offline_data.npy')
 
     max_replay_size_true_data_buffer = 10 ** 4
 
@@ -331,6 +339,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   smoother_train_share=smoother_train_share,
                   smoother_weight_decay=smoother_weight_decay,
                   state_data_source=state_data_source,
+                  measurement_dt_ratio=measurement_dt_ratio,
                   agent_kwargs=agent_kwargs,
                   )
     
@@ -342,6 +351,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     base_agent = DifferentiatingAgent(agent_type=agent_class,
                                       differentiator=BNN_Differentiator,
                                       state_data_source=state_data_source,
+                                      measurement_dt_ratio=measurement_dt_ratio,
                                       **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
@@ -377,6 +387,7 @@ def main(args):
                smoother_train_share=args.smoother_train_share,
                smoother_weight_decay=args.smoother_weight_decay,
                state_data_source=args.state_data_source,
+               measurement_dt_ratio=args.measurement_dt_ratio,
                log_mode=args.log_mode,
                )
 
@@ -391,7 +402,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=2000) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=2000)
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
@@ -416,7 +427,8 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--log_mode', type=int, default=0)
+    parser.add_argument('--measurement_dt_ratio', type=int, default=2)
+    parser.add_argument('--log_mode', type=int, default=4)
 
     args = parser.parse_args()
     main(args)

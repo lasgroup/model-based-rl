@@ -61,6 +61,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     from mbrl.utils.tolerance_reward import ToleranceReward
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
+    from mbrl.utils.offline_data import DifferentiatorOfflineData
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
     
     jax.config.update('jax_enable_x64', True)
@@ -84,7 +85,6 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
             end_value=bnn_steps,
             transition_steps=2000,
         )
-
     else:
         bnn_schedule = optax.constant_schedule(bnn_steps)
 
@@ -182,9 +182,19 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                                                return_best_model=True,
                                                eval_frequency=1_000,)
 
+    offline_data_gen = DifferentiatorOfflineData(differentiator=BNN_Differentiator,
+                                                 env=env,
+                                                 init_state_range=jnp.concatenate([env.init_state, env.init_state], axis=0))
+    key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
     if num_offline_samples > 0:
-        raise NotImplementedError('Offline data generation not implemented for rccar')
-    offline_data = None
+        offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
+                                                           num_samples=num_offline_samples,
+                                                           trajectory_length=num_online_samples,
+                                                           plot_results=log_mode > 3,
+                                                           measurement_dt_ratio=measurement_dt_ratio,
+                                                           state_data_source=state_data_source,)
+    else:
+        offline_data = None
 
     max_replay_size_true_data_buffer = 10 ** 4
 
