@@ -157,7 +157,7 @@ class DifferentiatingAgent(BaseAgentWrapper):
         # Resample the trajectories based on the measurement_dt_ratio
         if self.measurement_dt_ratio > 1:
             indices = range(0, len(longest_trajectory.observation), self.measurement_dt_ratio)
-            trajectories = self._resample_trajectories(longest_trajectory, indices)
+            longest_trajectory = self._resample_trajectories(longest_trajectory, indices)
         # Prepare the data for the differentiator
         inputs = longest_trajectory.extras['state_extras']['t'].reshape(-1, 1)
         true_dx = longest_trajectory.extras['state_extras']['derivative'].reshape(-1, self.env.observation_size)
