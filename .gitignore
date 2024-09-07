@@ -128,6 +128,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# Outputs
+output/
+results/
+result/
+out/
+
 # Spyder project settings
 .spyderproject
 .spyproject
