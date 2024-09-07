@@ -98,28 +98,34 @@ class PendulumOfflineData(OfflineData):
         actions = jr.uniform(key, shape=(num_samples, 1), minval=-1, maxval=1)
         return actions
 
-class DifferentiatorPendulumOfflineData(OfflineData):
-
+class DifferentiatorOfflineData(OfflineData):
     def __init__(self,
                  differentiator: BaseDifferentiator,
-                 state_data_source: str = 'smoother'):
-        super().__init__(env=ContinuousPendulumEnv(reward_source='dm-control'))
+                 env: Env,
+                 init_state_range: chex.Array):
+        """Offline Data Generator with a differentiator
+        Args:
+            differentiator (BaseDifferentiator): Differentiator to fit
+            env (Env): Environment to sample data from
+            init_state_range (chex.Array): Range of initial states to sample from, dimension (2, observation_size)"""
+        super().__init__(env=env)
         self.differentiator = differentiator
-        self.state_data_source = state_data_source
+        self.init_state_range = init_state_range
 
     def _sample_states(self,
                        key: chex.PRNGKey,
                        num_samples: int) -> Float[Array, 'dim_batch dim_state']:
-        key_angle, key_angular_velocity = jr.split(key)
-        angles = jr.uniform(key_angle, shape=(num_samples,), minval=-jnp.pi, maxval=jnp.pi)
-        cos, sin = jnp.cos(angles), jnp.sin(angles)
-        angular_velocity = jr.uniform(key_angular_velocity, shape=(num_samples,), minval=-10, maxval=10)
-        return jnp.stack([cos, sin, angular_velocity], axis=-1)
+        key, init_key = jr.split(key)
+        state_init_noise = jr.uniform(init_key, shape=(num_samples, self.env.observation_size), minval=-1, maxval=1)
+        def f(noise):
+            return self.init_state_range[0,:] + (self.init_state_range[1,:] - self.init_state_range[0,:]) * noise
+        return vmap(f)(state_init_noise)
+        
 
     def _sample_actions(self,
                         key: chex.PRNGKey,
                         num_samples: int) -> Float[Array, 'dim_batch dim_action']:
-        actions = jr.uniform(key, shape=(num_samples, 1), minval=-1, maxval=1)
+        actions = jr.uniform(key, shape=(num_samples, self.env.action_size), minval=-1, maxval=1)
         return actions
     
     def _sample_colored_actions(self, num_trajectories: int, num_points: int,
@@ -133,15 +139,21 @@ class DifferentiatorPendulumOfflineData(OfflineData):
         num_trajectories = num_samples // trajectory_length
         key_states, key_actions = jr.split(key, 2)
         init_states = self._sample_states(key_states, num_trajectories)
-        colored_actions = self._sample_colored_actions(num_trajectories, trajectory_length, key_actions).T
+        colored_actions = self._sample_colored_actions(num_trajectories*self.env.action_size,
+                                                       trajectory_length,
+                                                       key_actions).T
         # Scale the actions to -1 and 1
-        colored_actions = 2 * (colored_actions - colored_actions.min()) / (colored_actions.max() - colored_actions.min()) - 1
+        def scale_actions(actions: chex.Array) -> chex.Array:
+            return 2 * (actions - actions.min()) / (actions.max() - actions.min()) - 1
+        colored_actions = vmap(scale_actions, in_axes=0, out_axes=0)(colored_actions)
+        colored_actions = colored_actions.reshape(num_trajectories, self.env.action_size, trajectory_length)
         def run_full_sim(init_state, colored_action):
+            # init_state has shape (observation_size,), colored_action has shape (action_size, trajectory_length)
             first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
                             'dt': jnp.array(self.env.dynamics_params.dt),
                             'noise_key': self.env.init_noise_key}
-            brax_state = State(pipeline_state=jnp.array([-1.0, 0.0, 0.0]),
+            brax_state = State(pipeline_state=init_state,
                      obs=init_state,
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0),
@@ -149,14 +161,14 @@ class DifferentiatorPendulumOfflineData(OfflineData):
             def f(carry, xs):
                 next_state = self.env.step(carry, xs)
                 return next_state, next_state
-            _, next_states = jax.lax.scan(f, brax_state, colored_action.reshape(-1, self.env.action_size))
+            _, next_states = jax.lax.scan(f, brax_state, colored_action.T)
             return next_states
         next_states = vmap(run_full_sim, in_axes=(0,0))(init_states, colored_actions)
         states = jnp.concatenate([init_states.reshape(num_trajectories, 1, -1), next_states.obs[:,:-1,:]], axis=1)
 
         # Fit the differentiator
         if plot_results:
-            fig = plot_data(t=jnp.tile(jnp.arange(0, 0 + 0.05*trajectory_length, 0.05), (num_trajectories, 1)).reshape(num_trajectories, -1, 1),
+            fig = plot_data(t=jnp.tile(jnp.arange(0, 0 + self.env.dt*trajectory_length, self.env.dt), (num_trajectories, 1)).reshape(num_trajectories, -1, 1),
                             x=states,
                             u=colored_actions.reshape(num_trajectories, -1, 1),
                             x_dot=next_states.info['derivative'],
@@ -168,6 +180,7 @@ class DifferentiatorPendulumOfflineData(OfflineData):
         differentiator_keys = jr.split(key, num_trajectories)
         smoothed_state = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
         smoothed_derivative = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
+        # Cant do vmapping here, since the differentiator is stateful
         for k01 in range(num_trajectories):
             data = Data(inputs=jnp.arange(0, 0 + 0.05*trajectory_length, 0.05).reshape(-1,1), outputs=states[k01,:,:])
             differentiator_state = self.differentiator.train(key=differentiator_keys[k01], data=data)

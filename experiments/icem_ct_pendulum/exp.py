@@ -59,7 +59,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
-    from mbrl.utils.offline_data import DifferentiatorPendulumOfflineData
+    from mbrl.utils.offline_data import DifferentiatorOfflineData
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
     
     jax.config.update('jax_enable_x64', True)
@@ -184,7 +184,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                                                return_best_model=True,
                                                eval_frequency=1_000,)
 
-    offline_data_gen = DifferentiatorPendulumOfflineData(differentiator=BNN_Differentiator)
+    offline_data_gen = DifferentiatorOfflineData(differentiator=BNN_Differentiator,
+                                                 env=env,
+                                                 init_state_range=jnp.array([[-1.0, 0.0, 0.0],
+                                                                             [-1.0, 0.0, 0.0]]),)
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
     if num_offline_samples > 0:
         offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
@@ -413,7 +416,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--log_mode', type=int, default=2)
+    parser.add_argument('--log_mode', type=int, default=0)
 
     args = parser.parse_args()
     main(args)
