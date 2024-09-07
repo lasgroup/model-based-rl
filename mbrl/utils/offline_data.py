@@ -134,19 +134,25 @@ class DifferentiatorOfflineData(OfflineData):
                                               key=key, control_dim=num_trajectories,
                                               col_noise_exponent=col_noise_exponent)
     
-    def sample_transitions(self, key: Array, num_samples: int,
-                           trajectory_length: int, plot_results: bool = False) -> Transition:
-        num_trajectories = num_samples // trajectory_length
+    def sample_transitions(self,
+                           key: Array,
+                           num_samples: int,
+                           trajectory_length: int,
+                           plot_results: bool = False,
+                           measurement_dt_ratio: int = 1,
+                           state_data_source: str = 'smoother',
+                           ) -> Transition:
+        num_trajectories = num_samples // trajectory_length * measurement_dt_ratio
         key_states, key_actions = jr.split(key, 2)
         init_states = self._sample_states(key_states, num_trajectories)
         colored_actions = self._sample_colored_actions(num_trajectories*self.env.action_size,
-                                                       trajectory_length,
+                                                       trajectory_length+measurement_dt_ratio,
                                                        key_actions).T
         # Scale the actions to -1 and 1
         def scale_actions(actions: chex.Array) -> chex.Array:
             return 2 * (actions - actions.min()) / (actions.max() - actions.min()) - 1
         colored_actions = vmap(scale_actions, in_axes=0, out_axes=0)(colored_actions)
-        colored_actions = colored_actions.reshape(num_trajectories, self.env.action_size, trajectory_length)
+        colored_actions = colored_actions.reshape(num_trajectories, self.env.action_size, -1)
         def run_full_sim(init_state, colored_action):
             # init_state has shape (observation_size,), colored_action has shape (action_size, trajectory_length)
             first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
@@ -165,49 +171,73 @@ class DifferentiatorOfflineData(OfflineData):
             return next_states
         next_states = vmap(run_full_sim, in_axes=(0,0))(init_states, colored_actions)
         states = jnp.concatenate([init_states.reshape(num_trajectories, 1, -1), next_states.obs[:,:-1,:]], axis=1)
+        # Resample the measurements according to the measurement_dt_ratio
+        indices = jnp.arange(0, trajectory_length+measurement_dt_ratio, measurement_dt_ratio)
+
+        # x and t are longer by 1, to be able to use next_state from smoother
+        t = jnp.tile(indices*self.env.dt, (num_trajectories, 1)).reshape(num_trajectories, -1, 1)
+        x = states.take(indices=indices, axis=1)
+
+        u = colored_actions.take(indices=indices[:-1], axis=2).transpose(0, 2, 1)
+        x_dot_true = next_states.info['derivative'].take(indices=indices[:-1], axis=1)
+        next_states = states.take(indices=indices[:-1]+measurement_dt_ratio, axis=1)
 
         # Fit the differentiator
         if plot_results:
-            fig = plot_data(t=jnp.tile(jnp.arange(0, 0 + self.env.dt*trajectory_length, self.env.dt), (num_trajectories, 1)).reshape(num_trajectories, -1, 1),
-                            x=states,
-                            u=colored_actions.reshape(num_trajectories, -1, 1),
-                            x_dot=next_states.info['derivative'],
+            fig = plot_data(t=t[:,:-1,:],
+                            x=x[:,:-1,:],
+                            u=u,
+                            x_dot=x_dot_true,
                             title='Offline Data')
             if not os.path.exists('./results/offline_data'):
                 os.makedirs('./results/offline_data')
             plt.savefig('./results/offline_data/colored_data.png')
             plt.close(fig)
         differentiator_keys = jr.split(key, num_trajectories)
-        smoothed_state = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
-        smoothed_derivative = jnp.zeros((num_trajectories, trajectory_length, self.env.observation_size))
+        smoothed_state = jnp.zeros_like(x)
+        smoothed_derivative = jnp.zeros_like(x)
         # Cant do vmapping here, since the differentiator is stateful
         for k01 in range(num_trajectories):
-            data = Data(inputs=jnp.arange(0, 0 + 0.05*trajectory_length, 0.05).reshape(-1,1), outputs=states[k01,:,:])
+            data = Data(inputs=t[k01,:,:], outputs=x[k01,:,:])
             differentiator_state = self.differentiator.train(key=differentiator_keys[k01], data=data)
             differentiator_state, pred_x = self.differentiator.predict(state=differentiator_state, t=data.inputs)
             differentiator_state, pred_x_dot = self.differentiator.differentiate(state=differentiator_state, t=data.inputs)
             smoothed_state = smoothed_state.at[k01, :, :].set(pred_x)
             smoothed_derivative = smoothed_derivative.at[k01, :, :].set(pred_x_dot)
             if plot_results:
-                fig, _ = self.differentiator.plot_fit(inputs=data.inputs,
-                                                  pred_x=pred_x,
-                                                  true_x=data.outputs,
-                                                  pred_x_dot=pred_x_dot,
-                                                  true_x_dot=next_states.info['derivative'][k01,:,:],
-                                                  state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
+                fig, _ = self.differentiator.plot_fit(true_t=data.inputs[:-1,:],
+                                                        pred_x=pred_x[:-1,:],
+                                                        true_x=data.outputs[:-1,:],
+                                                        pred_x_dot=pred_x_dot[:-1,:],
+                                                        true_x_dot=x_dot_true[k01,:,:],
+                                                        state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
                 if not os.path.exists('./results/offline_data'):
                     os.makedirs('./results/offline_data')
                 plt.savefig(f'./results/offline_data/trajectory_{k01}.png')
                 plt.close(fig)
-        transitions = Transition(observation=smoothed_state.reshape(num_trajectories*trajectory_length, -1),
-                          action=colored_actions.reshape(num_trajectories*trajectory_length, -1),
-                          reward=next_states.reward.reshape(num_trajectories*trajectory_length, -1),
-                          discount=jnp.zeros(shape=(num_trajectories*trajectory_length,)),
-                          next_observation=next_states.obs.reshape(num_trajectories*trajectory_length, -1),
-                          extras={'state_extras': {'t': jnp.tile(jnp.arange(0, 0 + 0.05*trajectory_length, 0.05), (num_trajectories, 1)).reshape(num_trajectories*trajectory_length, 1),
-                                                   'derivative': smoothed_derivative.reshape(num_trajectories*trajectory_length, -1),
-                                                   'dt': jnp.ones((num_trajectories*trajectory_length, 1)) * self.env.dynamics_params.dt,
-                                                   'true_derivative': next_states.info['derivative'].reshape(num_trajectories*trajectory_length, -1)}})
+
+        total_num_samples = smoothed_state.shape[0]*(smoothed_state.shape[1] - 1)
+        if state_data_source == 'smoother':
+            transitions = Transition(observation=smoothed_state[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
+                              action=u.reshape(total_num_samples, self.env.action_size),
+                              reward=jnp.zeros(shape=(total_num_samples,)),
+                              discount=jnp.zeros(shape=(total_num_samples,)),
+                              next_observation=smoothed_state[:,1:,:].reshape(total_num_samples, self.env.observation_size),
+                              extras={'state_extras': {'t': t[:,:-1,:].reshape(total_num_samples, 1),
+                                                       'derivative': smoothed_derivative[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
+                                                       'dt': jnp.ones((total_num_samples, 1)) * self.env.dynamics_params.dt * measurement_dt_ratio,
+                                                       'true_derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size)},})
+        elif state_data_source == 'true':
+            transitions = Transition(observation=x[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
+                                     action=u.reshape(total_num_samples, self.env.action_size),
+                                     reward=jnp.zeros(shape=(total_num_samples,)),
+                                     discount=jnp.zeros(shape=(total_num_samples,)),
+                                     next_observation=x[:,1:,:].reshape(total_num_samples, self.env.observation_size),
+                                     extras={'state_extras': {'t': t[:,:-1,:].reshape(total_num_samples, 1),
+                                                              'derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size),
+                                                              'dt': jnp.ones((total_num_samples, 1)) * self.env.dynamics_params.dt * measurement_dt_ratio,
+                                                              'true_derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size)},})
+        
         return transitions
 
 
