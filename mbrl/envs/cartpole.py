@@ -66,6 +66,8 @@ class ContinuousCartpoleEnv(Env):
         value_at_margin = 0.1
         margin_factor = 10.0
         self.reward_source = reward_source
+        if noise_level is not None:
+            chex.assert_shape(noise_level, (4,))
         self.noise_level = noise_level
         self.init_noise_key = init_noise_key
         self.state_labels = [r'$x$', r'$cos(\theta)$', r'$sin(\theta)$', r'$\dot{x}$', r'$\dot{\theta}$']
