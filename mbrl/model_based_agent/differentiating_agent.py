@@ -282,14 +282,12 @@ class DifferentiatingAgent(BaseAgentWrapper):
                 else:
                     state_extras[key] = value.take(indices[:-1], axis=0)
 
-        trajectories = []
-        for i in range(len(indices)):
-            trajectories.append(Transition(
-                observation=observations[i],
-                action=actions[i],
-                reward=rewards[i],
-                discount=discounts[i],
-                next_observation=next_observations[i],
-                extras={'state_extras': {key: value[i] for key, value in state_extras.items()}}
-            ))
-        return trajectories
+        trajectory = Transition(
+                observation=observations,
+                action=actions,
+                reward=rewards,
+                discount=discounts,
+                next_observation=next_observations,
+                extras={'state_extras': {key: value for key, value in state_extras.items()}}
+        )
+        return trajectory
