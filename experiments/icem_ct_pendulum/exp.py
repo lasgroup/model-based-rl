@@ -36,6 +36,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                smoother_weight_decay: float = 1e-4,
                state_data_source: str = 'smoother',
                measurement_dt_ratio: int = 1,
+               load_offline_data: str = None,
                log_mode: int = 2,
                ):
     
@@ -61,7 +62,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
-    from mbrl.utils.offline_data import DifferentiatorOfflineData
+    from mbrl.utils.offline_data import DifferentiatorOfflineData, save_transitions, load_transitions
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
     
     jax.config.update('jax_enable_x64', True)
@@ -191,19 +192,18 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                                                                              [-1.0, 0.0, 0.0]]),)
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
     if num_offline_samples > 0:
-        offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
-                                                           num_samples=num_offline_samples,
-                                                           trajectory_length=num_online_samples,
-                                                           plot_results=log_mode > 3,
-                                                           measurement_dt_ratio=measurement_dt_ratio,
-                                                           state_data_source=state_data_source)
+        if load_offline_data is not None:
+            offline_data = load_transitions(filename=load_offline_data)
+        else:
+            offline_data = offline_data_gen.sample_transitions(key=key_offline_data,
+                                                               num_samples=num_offline_samples,
+                                                               trajectory_length=num_online_samples,
+                                                               plot_results=log_mode > 3,
+                                                               measurement_dt_ratio=measurement_dt_ratio,
+                                                               state_data_source=state_data_source)
     else:
         offline_data = None
 
-
-    np.save('results/pendulum_offline_data.npy', offline_data)
-    
-    loaded_transitions = np.load('results/pendulum_offline_data.npy')
 
     max_replay_size_true_data_buffer = 10 ** 4
 
@@ -388,6 +388,7 @@ def main(args):
                smoother_weight_decay=args.smoother_weight_decay,
                state_data_source=args.state_data_source,
                measurement_dt_ratio=args.measurement_dt_ratio,
+               load_offline_data=args.load_offline_data,
                log_mode=args.log_mode,
                )
 
@@ -402,7 +403,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=2000)
+    parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
@@ -422,13 +423,14 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--bnn_dt', type=float, default=0.05)
-    parser.add_argument('--smoother_steps', type=int, default=48_000)
+    parser.add_argument('--smoother_steps', type=int, default=32_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--measurement_dt_ratio', type=int, default=2)
-    parser.add_argument('--log_mode', type=int, default=4)
+    parser.add_argument('--measurement_dt_ratio', type=int, default=1)
+    parser.add_argument('--load_offline_data', type=str, default=None)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)
