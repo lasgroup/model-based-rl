@@ -240,6 +240,17 @@ class DifferentiatorOfflineData(OfflineData):
                                                               'derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size),
                                                               'dt': jnp.ones((total_num_samples, 1)) * self.env.dt * measurement_dt_ratio,
                                                               'true_derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size)},})
+            
+        elif state_data_source == 'discrete':
+            transitions = Transition(observation=x[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
+                                     action=u.reshape(total_num_samples, self.env.action_size),
+                                     reward=jnp.zeros(shape=(total_num_samples,)),
+                                     discount=jnp.zeros(shape=(total_num_samples,)),
+                                     next_observation=x[:,1:,:].reshape(total_num_samples, self.env.observation_size),
+                                     extras={'state_extras': {'t': t[:,:-1,:].reshape(total_num_samples, 1),
+                                                              'derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size),
+                                                              'dt': jnp.ones((total_num_samples, 1)) * self.env.dt * measurement_dt_ratio},})
+
         
         return transitions
 

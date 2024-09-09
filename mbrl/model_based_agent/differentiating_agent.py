@@ -13,7 +13,7 @@ from bsm.utils.normalization import Data
 from bsm.utils import StatisticalModelState
 from mbrl.model_based_agent.base_model_based_agent import ModelBasedAgentState
 from diff_smoothers.Base_Differentiator import BaseDifferentiator
-from diff_smoothers.data_functions.data_output import plot_derivative_data, plot_data
+from diff_smoothers.data_functions.data_output import plot_derivative_data, plot_data, plot_prediction_data, plot_data_reward
 from mbrl.model_based_agent.base_agent_wrapper import BaseAgentWrapper
 from mbrl.utils.brax_utils import EnvInteractor
 
@@ -291,3 +291,55 @@ class DifferentiatingAgent(BaseAgentWrapper):
                 extras={'state_extras': {key: value for key, value in state_extras.items()}}
         )
         return trajectory
+    
+    def plot_evaluation_data(self,
+                             agent_state: ModelBasedAgentState,
+                             data: Transition,
+                             episode_idx: int):
+        # Check what the dynamics model is predicting
+        x_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
+        x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
+        input1 = jnp.concatenate([data.observation[0,:], data.action[0,:]], axis=-1).squeeze()
+        x_est = x_est.at[0,:].set(data.observation[0,:].squeeze())
+        initial_model_output = self.statistical_model(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+        x_dot_est = x_dot_est.at[0,:].set(initial_model_output.mean.squeeze())
+        for i in range(1, len(data.extras['state_extras']['t'])):
+            new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dynamics_dt
+            x_est = x_est.at[i,:].set(new_x_est.squeeze())
+            model_outputs = self.statistical_model(jnp.concatenate([x_est[i,:], data.action[i,:].reshape(-1,)]),
+                                                            agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+            x_dot_est = x_dot_est.at[i,:].set(model_outputs.mean)
+        # Plot the predicted and true dynamics
+        fig = plot_prediction_data(t=data.extras['state_extras']['t'].reshape(-1,1),
+                                   x_true=data.observation.reshape(-1, data.observation.shape[-1]),
+                                   x_est=x_est,
+                                   x_est_std=jnp.zeros_like(x_est),
+                                   beta=jnp.zeros((data.observation.shape[-1])),
+                                   state_labels=self.env.state_labels,
+                                   source='dyn.model')
+        wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
+        plt.close(fig)
+        # Plot the model predicted dynamics OFF OF THE TRUE STATE!
+        pred_dx = self.statistical_model.predict_batch(jnp.concatenate([data.observation.reshape(-1, data.observation.shape[-1]), data.action.reshape(-1, data.action.shape[-1])], axis=-1),
+                                        agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+        fig = plot_derivative_data(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                                   x = data.observation.reshape(-1, data.observation.shape[-1]),
+                                   x_dot_true = data.extras['state_extras']['derivative'].reshape(-1, data.observation.shape[-1]),
+                                   x_dot_est=pred_dx.mean,
+                                   x_dot_est_std=pred_dx.epistemic_std,
+                                   source='Dyn. Model',
+                                   beta = pred_dx.statistical_model_state.beta,
+                                   num_trajectory_to_plot=-1,
+                                   state_labels=self.env.state_derivative_labels,
+                                   )
+        wandb.log({'eval_true_env/dyn_model_derivative': wandb.Image(fig)})
+        plt.close(fig)
+        # Plot the actual actions and observations
+        fig = plot_data_reward(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                               x=data.observation.reshape(-1, data.observation.shape[-1]),
+                               reward=data.reward.reshape(-1, 1),
+                               u=data.action.reshape(-1, data.action.shape[-1]),
+                               title='Evaluation on True Env',
+                               state_labels=self.env.state_labels,)
+        wandb.log({'eval_true_env/evaluation_data': wandb.Image(fig)})
+        plt.close(fig)

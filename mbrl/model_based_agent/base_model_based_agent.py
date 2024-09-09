@@ -228,6 +228,39 @@ class BaseModelBasedAgent(ABC):
         env_steps = agent_state.env_steps + self.num_envs * self.episode_length
         return ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent), transitions
 
+
+    def plot_evaluation_data(self,
+                             agent_state: ModelBasedAgentState,
+                             data: Transition,
+                             episode_idx: int):
+        # Calculate and plot the prediction data
+        pred_delta_x = self.statistical_model.predict_batch(jnp.concatenate([data.observation.reshape(-1, data.observation.shape[-1]),
+                                                                             data.action.reshape(-1, data.action.shape[-1])], axis=-1),
+                                                            agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
+        num_offsets = int(self.dynamics_dt//self.dt)
+        x_est = jnp.concatenate([jnp.full((num_offsets, data.observation.shape[-1]), jnp.nan),
+                                 data.observation.reshape(-1, data.observation.shape[-1])[:-num_offsets,:] + \
+                                 pred_delta_x.mean[:-num_offsets,:]], axis=0)
+        fig = plot_prediction_data(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                                   x_true=data.observation.reshape(-1, data.observation.shape[-1]),
+                                   x_est=x_est,
+                                   x_est_std=jnp.zeros_like(x_est),
+                                   beta=jnp.zeros((data.observation.shape[-1])),
+                                   state_labels=self.env.state_labels,
+                                   source='dyn.model')
+        wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
+        plt.close(fig)
+
+        # Plot the data collected during evaluation
+        fig = plot_data_reward(t=data.extras['state_extras']['t'].reshape(-1, 1),
+                               x=data.observation.reshape(-1, data.observation.shape[-1]),
+                               reward=data.reward.reshape(-1, 1),
+                               u=data.action.reshape(-1, data.action.shape[-1]),
+                               title='Evaluation on True Env',
+                               state_labels=self.env.state_labels,)
+        wandb.log({'eval_true_env/evaluation_data': wandb.Image(fig)})
+        plt.close(fig)
+
     def do_episode(self,
                    agent_state: ModelBasedAgentState,
                    episode_idx: int,
@@ -258,59 +291,15 @@ class BaseModelBasedAgent(ABC):
         print(f'Start with evaluation of the policy')
         metrics, data = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
-        if self.log_mode > 1:
-            # Check what the dynamics model is predicting
-            x_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
-            x_dot_est = jnp.zeros((data.observation.shape[0], data.observation.shape[2]))
-            input1 = jnp.concatenate([data.observation[0,:], data.action[0,:]], axis=-1).squeeze()
-            x_est = x_est.at[0,:].set(data.observation[0,:].squeeze())
-            initial_model_output = self.statistical_model(input1, agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
-            x_dot_est = x_dot_est.at[0,:].set(initial_model_output.mean.squeeze())
-            for i in range(1, len(data.extras['state_extras']['t'])):
-                new_x_est = x_est[i-1,:] + x_dot_est[i-1,:] * self.dynamics_dt
-                x_est = x_est.at[i,:].set(new_x_est.squeeze())
-                model_outputs = self.statistical_model(jnp.concatenate([x_est[i,:], data.action[i,:].reshape(-1,)]),
-                                                                agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
-                x_dot_est = x_dot_est.at[i,:].set(model_outputs.mean)
-            # Plot the predicted and true dynamics
-            fig = plot_prediction_data(t=data.extras['state_extras']['t'].reshape(-1,1),
-                                       x_true=data.observation.reshape(-1, data.observation.shape[-1]),
-                                       x_est=x_est,
-                                       x_est_std=jnp.zeros_like(x_est),
-                                       beta=jnp.zeros((data.observation.shape[-1])),
-                                       state_labels=self.env.state_labels,
-                                       source='dyn.model')
-            wandb.log({'eval_true_env/dyn_model_comparison': wandb.Image(fig)})
-            plt.close(fig)
-            # Plot the model prediccted dynamics OFF OF THE TRUE STATE!
-            pred_dx = self.statistical_model.predict_batch(jnp.concatenate([data.observation.reshape(-1, data.observation.shape[-1]), data.action.reshape(-1, data.action.shape[-1])], axis=-1),
-                                            agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state)
-            fig = plot_derivative_data(t=data.extras['state_extras']['t'].reshape(-1, 1),
-                                       x = data.observation.reshape(-1, data.observation.shape[-1]),
-                                       x_dot_true = data.extras['state_extras']['derivative'].reshape(-1, data.observation.shape[-1]),
-                                       x_dot_est=pred_dx.mean,
-                                       x_dot_est_std=pred_dx.epistemic_std,
-                                       source='Dyn. Model',
-                                       beta = pred_dx.statistical_model_state.beta,
-                                       num_trajectory_to_plot=-1,
-                                       state_labels=self.env.state_derivative_labels,
-                                       )
-            wandb.log({'eval_true_env/dyn_model_derivative': wandb.Image(fig)})
-            plt.close(fig)
-            # Plot the actual actions and observations
-            fig = plot_data_reward(t=data.extras['state_extras']['t'].reshape(-1, 1),
-                                   x=data.observation.reshape(-1, data.observation.shape[-1]),
-                                   reward=data.reward.reshape(-1, 1),
-                                   u=data.action.reshape(-1, data.action.shape[-1]),
-                                   title='Evaluation on True Env',
-                                   state_labels=self.env.state_labels,)
-            wandb.log({'eval_true_env/evaluation_data': wandb.Image(fig)})
-            plt.close(fig)
-
         if self.log_mode > 0:
             wandb.log(metrics | {'episode_idx': episode_idx})
         else:
             print(metrics)
+        
+        if self.log_mode > 1:
+            self.plot_evaluation_data(agent_state=agent_state,
+                                      data=data,
+                                      episode_idx=episode_idx)
         print(f'End with evaluation of the policy')
         return agent_state
 

@@ -8,7 +8,7 @@ ENTITY = 'cbiel01'
 # 3 - Additional Logging of Dyn. Model Learning metrics
 # 4 - Additional Logging of offline data
 
-def experiment(project_name: str = 'ICEM_CT_Pendulum',
+def experiment(project_name: str = 'ICEM_DT_Pendulum',
                num_offline_samples: int = 0,
                optimizer_horizon: int = 20,
                num_online_samples: int = 200,
@@ -60,7 +60,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
-    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
+    from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from mbrl.utils.offline_data import DifferentiatorOfflineData, save_transitions, load_transitions
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
@@ -207,7 +207,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     max_replay_size_true_data_buffer = 10 ** 4
 
-    extra_fields = ('derivative', 'true_derivative', 't', 'dt')
+    extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (env.observation_size,) * 2 + (1,) * 2
     state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
 
@@ -235,9 +235,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
 
     agent_class = None
     if exploration == 'optimistic':
-        agent_class = ContinuousOptimisticModelBasedAgent
+        agent_class = OptimisticModelBasedAgent
     elif exploration == 'pets':
-        agent_class = ContinuousPETSModelBasedAgent
+        agent_class = PETSModelBasedAgent
 
     class DMPendulumReward(Reward):
         def __init__(self):
@@ -307,10 +307,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         'log_mode': log_mode,
         'deterministic_policy_for_data_collection': deterministic_policy_for_data_collection,
         'first_episode_for_policy_training': first_episode_for_policy_training,
-        'predict_difference': False,
+        'predict_difference': True,
         'reset_statistical_model': reset_statistical_model,
         'dt': env.dt,
-        'dynamics_dt': bnn_dt,
+        'dynamics_dt': bnn_dt*measurement_dt_ratio,
         'state_extras_ref': state_extras,
     }
 
@@ -348,11 +348,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
 
-    base_agent = DifferentiatingAgent(agent_type=agent_class,
-                                      differentiator=BNN_Differentiator,
-                                      state_data_source=state_data_source,
-                                      measurement_dt_ratio=measurement_dt_ratio,
-                                      **agent_kwargs)
+    base_agent = agent_class(**agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
                                           start_from_scratch=True,
@@ -403,7 +399,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Pendulum_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=0)
+    parser.add_argument('--num_offline_samples', type=int, default=1000)
     parser.add_argument('--optimizer_horizon', type=int, default=20)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
@@ -412,7 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=2)
+    parser.add_argument('--num_episodes', type=int, default=1)
     parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
@@ -423,12 +419,12 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--bnn_dt', type=float, default=0.05)
-    parser.add_argument('--smoother_steps', type=int, default=32_000)
-    parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
+    parser.add_argument('--smoother_steps', type=int, default=1_000)
+    parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
-    parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--measurement_dt_ratio', type=int, default=1)
+    parser.add_argument('--state_data_source', type=str, default='discrete')
+    parser.add_argument('--measurement_dt_ratio', type=int, default=2)
     parser.add_argument('--load_offline_data', type=str, default=None)
     parser.add_argument('--log_mode', type=int, default=2)
 
