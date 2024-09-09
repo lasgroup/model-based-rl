@@ -8,6 +8,9 @@ from brax.envs.base import Env, State
 from jaxtyping import Float, Array
 from brax.training.types import Transition
 import jax
+import numpy as np
+import json
+import glob
 from jax import vmap
 
 from mbrl.envs.pendulum import PendulumEnv
@@ -141,6 +144,7 @@ class DifferentiatorOfflineData(OfflineData):
                            plot_results: bool = False,
                            measurement_dt_ratio: int = 1,
                            state_data_source: str = 'smoother',
+                           pathname: str = './results/offline_data',
                            ) -> Transition:
         num_trajectories = num_samples // trajectory_length * measurement_dt_ratio
         key_states, key_actions = jr.split(key, 2)
@@ -155,9 +159,9 @@ class DifferentiatorOfflineData(OfflineData):
         colored_actions = colored_actions.reshape(num_trajectories, self.env.action_size, -1)
         def run_full_sim(init_state, colored_action):
             # init_state has shape (observation_size,), colored_action has shape (action_size, trajectory_length)
-            first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
+            first_info: dict = {'derivative': jnp.zeros(self.env.observation_size),
                             't': jnp.array(0.0),
-                            'dt': jnp.array(self.env.dynamics_params.dt),
+                            'dt': jnp.array(self.env.dt),
                             'noise_key': self.env.init_noise_key}
             brax_state = State(pipeline_state=init_state,
                      obs=init_state,
@@ -188,10 +192,11 @@ class DifferentiatorOfflineData(OfflineData):
                             x=x[:,:-1,:],
                             u=u,
                             x_dot=x_dot_true,
-                            title='Offline Data')
-            if not os.path.exists('./results/offline_data'):
-                os.makedirs('./results/offline_data')
-            plt.savefig('./results/offline_data/colored_data.png')
+                            title='Offline Data',
+                            state_labels=self.env.state_labels)
+            if not os.path.exists(pathname):
+                os.makedirs(pathname)
+            plt.savefig(f'{pathname}/colored_data.png')
             plt.close(fig)
         differentiator_keys = jr.split(key, num_trajectories)
         smoothed_state = jnp.zeros_like(x)
@@ -210,10 +215,8 @@ class DifferentiatorOfflineData(OfflineData):
                                                         true_x=data.outputs[:-1,:],
                                                         pred_x_dot=pred_x_dot[:-1,:],
                                                         true_x_dot=x_dot_true[k01,:,:],
-                                                        state_labels=[r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$'])
-                if not os.path.exists('./results/offline_data'):
-                    os.makedirs('./results/offline_data')
-                plt.savefig(f'./results/offline_data/trajectory_{k01}.png')
+                                                        state_labels=self.env.state_labels)
+                plt.savefig(f'{pathname}/trajectory_{k01}.png')
                 plt.close(fig)
 
         total_num_samples = smoothed_state.shape[0]*(smoothed_state.shape[1] - 1)
@@ -225,7 +228,7 @@ class DifferentiatorOfflineData(OfflineData):
                               next_observation=smoothed_state[:,1:,:].reshape(total_num_samples, self.env.observation_size),
                               extras={'state_extras': {'t': t[:,:-1,:].reshape(total_num_samples, 1),
                                                        'derivative': smoothed_derivative[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
-                                                       'dt': jnp.ones((total_num_samples, 1)) * self.env.dynamics_params.dt * measurement_dt_ratio,
+                                                       'dt': jnp.ones((total_num_samples, 1)) * self.env.dt * measurement_dt_ratio,
                                                        'true_derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size)},})
         elif state_data_source == 'true':
             transitions = Transition(observation=x[:,:-1,:].reshape(total_num_samples, self.env.observation_size),
@@ -235,7 +238,7 @@ class DifferentiatorOfflineData(OfflineData):
                                      next_observation=x[:,1:,:].reshape(total_num_samples, self.env.observation_size),
                                      extras={'state_extras': {'t': t[:,:-1,:].reshape(total_num_samples, 1),
                                                               'derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size),
-                                                              'dt': jnp.ones((total_num_samples, 1)) * self.env.dynamics_params.dt * measurement_dt_ratio,
+                                                              'dt': jnp.ones((total_num_samples, 1)) * self.env.dt * measurement_dt_ratio,
                                                               'true_derivative': x_dot_true.reshape(total_num_samples, self.env.observation_size)},})
         
         return transitions
@@ -298,6 +301,83 @@ class WhenToControlWrapper(OfflineData):
                                  )
         return transitions
 
+def save_array_to_file(array, filename):
+    """Helper function to save a JAX array to a .npz file."""
+    np.savez_compressed(filename, array=array)
+
+def save_transitions(transitions: Transition, filename: str):
+    """Save transitions to a file, including all the extras."""
+    # Save the main transition data
+    with open(filename, 'wb') as f:
+        jnp.savez(f, observation=transitions.observation,
+                  action=transitions.action,
+                  reward=transitions.reward,
+                  discount=transitions.discount,
+                  next_observation=transitions.next_observation)
+
+    # Save each entry in the extras dictionary
+    extras = transitions.extras['state_extras']
+    filename = filename.split('.')[0]
+
+    def save_dict(d, prefix):
+        """Recursively save dictionaries."""
+        for key, value in d.items():
+            if isinstance(value, dict):
+                # Recursively save nested dictionaries
+                save_dict(value, f'{prefix}-{key}')
+            elif isinstance(value, jnp.ndarray):
+                # Save arrays
+                save_array_to_file(value, f'{filename}-{prefix}-{key}.npz')
+            else:
+                raise TypeError(f"Unsupported type {type(value)} for key {key}")
+
+    save_dict(extras, 'state_extras')
+        
+def load_array_from_file(filename):
+    """Helper function to load a JAX array from a .npz file."""
+    with np.load(filename) as npz_file:
+        return jax.device_put(npz_file['array'])  # Convert numpy array back to JAX array
+
+def load_transitions(filename: str) -> Transition:
+    """Load transitions from a file, including all the extras."""
+    # Load the main transition data
+    with open(filename, 'rb') as f:
+        data = jnp.load(f, allow_pickle=True)
+        observation = data['observation']
+        action = data['action']
+        reward = data['reward']
+        discount = data['discount']
+        next_observation = data['next_observation']
+    
+    # Load the extras dictionary
+    extras = {}
+    filename = filename.split('.')[0]
+    
+
+    def load_dict(prefix):
+        """Recursively load dictionaries."""
+        for file in glob.glob(f'{filename}-{prefix}-*.npz'):
+            key = os.path.basename(file).split(f'{prefix}-')[1].replace('.npz', '')
+            extras[key] = load_array_from_file(file)
+        
+        # Handle nested dictionaries
+        for key in list(extras.keys()):
+            if isinstance(extras[key], dict):
+                # Recursively load nested dictionaries
+                nested_prefix = f'{prefix}_{key}'
+                extras[key] = load_dict(nested_prefix)
+        
+        return extras
+    
+    extras = load_dict('state_extras')
+    extras = {'state_extras': extras}
+    
+    return Transition(observation=observation,
+                      action=action,
+                      reward=reward,
+                      discount=discount,
+                      next_observation=next_observation,
+                      extras=extras)
 
 if __name__ == '__main__':
     offline_data_gen = WhenToControlWrapper()
