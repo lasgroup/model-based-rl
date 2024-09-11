@@ -21,7 +21,6 @@ class DifferentiatingAgent(BaseAgentWrapper):
     def __init__(self, agent_type,
                  differentiator: BaseDifferentiator,
                  state_data_source: str = 'smoother',
-                 measurement_dt_ratio: int = 1,
                  **kwargs):
         """Agent that uses a differentiator to estimate the state derivatives.
         Args:
@@ -37,7 +36,6 @@ class DifferentiatingAgent(BaseAgentWrapper):
         super().__init__(agent_type, **kwargs)
         self.state_data_source = state_data_source
         self.differentiator = differentiator
-        self.measurement_dt_ratio = measurement_dt_ratio
         
         if self.log_mode > 0:
             wandb.define_metric("dynamics_model/data", summary="min")
@@ -258,39 +256,6 @@ class DifferentiatingAgent(BaseAgentWrapper):
             extras={'state_extras': {key: value[-1] for key, value in state_extras.items()}}
         ))
         return trajectories
-    
-    def _resample_trajectories(self,
-                              transition: Transition,
-                              indices: list[int],
-                              ) -> list[Transition]:
-        # Ensure indices are sorted and unique
-        indices = sorted(set(indices))
-        indices = jnp.asarray(indices)
-        # Resample the separate parts
-        observations = transition.observation.take(indices[:-1], axis=0)
-        actions = transition.action.take(indices[:-1], axis=0)
-        rewards = transition.reward.take(indices[:-1], axis=0)
-        discounts = transition.discount.take(indices[:-1], axis=0)
-        # Make sure to take the correct next observations
-        next_observations = transition.observation.take(indices[1:], axis=0)
-        # Resample all entries in 'state_extras'
-        state_extras = {}
-        for key, value in transition.extras['state_extras'].items():
-            if isinstance(value, jnp.ndarray):
-                if key == 'dt':
-                    state_extras[key] = jnp.diff(transition.extras['state_extras']['t'].take(indices))
-                else:
-                    state_extras[key] = value.take(indices[:-1], axis=0)
-
-        trajectory = Transition(
-                observation=observations,
-                action=actions,
-                reward=rewards,
-                discount=discounts,
-                next_observation=next_observations,
-                extras={'state_extras': {key: value for key, value in state_extras.items()}}
-        )
-        return trajectory
     
     def plot_evaluation_data(self,
                              agent_state: ModelBasedAgentState,

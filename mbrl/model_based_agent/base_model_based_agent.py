@@ -58,6 +58,7 @@ class BaseModelBasedAgent(ABC):
                  dynamics_dt: float = 0.05,
                  state_extras_ref: dict = {},
                  actor_learning_schedule: dict | None = None,
+                 measurement_dt_ratio: int = 1,
                  log_to_wandb: bool = False,
                  ):
         self.env = env
@@ -82,6 +83,7 @@ class BaseModelBasedAgent(ABC):
         self.dynamics_dt = dynamics_dt
         self.state_extras_ref = state_extras_ref
         self.actor_learning_schedule = actor_learning_schedule
+        self.measurement_dt_ratio = measurement_dt_ratio
         if self.actor_learning_schedule:
             self.sorted_schedule_keys = sorted(self.actor_learning_schedule.keys())
         if log_to_wandb:
@@ -221,13 +223,48 @@ class BaseModelBasedAgent(ABC):
                                                             actor=self.actor
                                                             )
         final_state, optimizer_state, transitions = interaction
+        if self.measurement_dt_ratio > 1:
+            indices = range(0, len(transitions.observation), self.measurement_dt_ratio)
+            transitions = self._resample_trajectories(transitions, indices)
         collected_data_buffer_state = agent_state.optimizer_state.true_buffer_state
         collected_data_buffer_state = self.collected_data_buffer.insert(buffer_state=collected_data_buffer_state,
                                                                         samples=transitions)
         optimizer_state = optimizer_state.replace(true_buffer_state=collected_data_buffer_state)
         env_steps = agent_state.env_steps + self.num_envs * self.episode_length
         return ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent), transitions
+    
+    def _resample_trajectories(self,
+                              transition: Transition,
+                              indices: list[int],
+                              ) -> list[Transition]:
+        # Ensure indices are sorted and unique
+        indices = sorted(set(indices))
+        indices = jnp.asarray(indices)
+        # Resample the separate parts
+        observations = transition.observation.take(indices[:-1], axis=0)
+        actions = transition.action.take(indices[:-1], axis=0)
+        rewards = transition.reward.take(indices[:-1], axis=0)
+        discounts = transition.discount.take(indices[:-1], axis=0)
+        # Make sure to take the correct next observations
+        next_observations = transition.observation.take(indices[1:], axis=0)
+        # Resample all entries in 'state_extras'
+        state_extras = {}
+        for key, value in transition.extras['state_extras'].items():
+            if isinstance(value, jnp.ndarray):
+                if key == 'dt':
+                    state_extras[key] = jnp.diff(transition.extras['state_extras']['t'].take(indices))
+                else:
+                    state_extras[key] = value.take(indices[:-1], axis=0)
 
+        trajectory = Transition(
+                observation=observations,
+                action=actions,
+                reward=rewards,
+                discount=discounts,
+                next_observation=next_observations,
+                extras={'state_extras': {key: value for key, value in state_extras.items()}}
+        )
+        return trajectory
 
     def plot_evaluation_data(self,
                              agent_state: ModelBasedAgentState,

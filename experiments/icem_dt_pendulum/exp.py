@@ -312,6 +312,7 @@ def experiment(project_name: str = 'ICEM_DT_Pendulum',
         'dt': env.dt,
         'dynamics_dt': bnn_dt*measurement_dt_ratio,
         'state_extras_ref': state_extras,
+        'measurement_dt_ratio': measurement_dt_ratio,
     }
 
     config = dict(num_offline_samples=num_offline_samples,

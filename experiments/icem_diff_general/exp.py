@@ -441,6 +441,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         'dt': env.dt,
         'dynamics_dt': env.dt*measurement_dt_ratio if state_data_source == 'discrete' else env.dt,
         'state_extras_ref': state_extras,
+        'measurement_dt_ratio': measurement_dt_ratio,
     }
 
     # ------------------------------------------------------------------
@@ -497,7 +498,6 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         base_agent = DifferentiatingAgent(agent_type=agent_class,
                                           differentiator=BNN_Differentiator,
                                           state_data_source=state_data_source,
-                                          measurement_dt_ratio=measurement_dt_ratio,
                                           **agent_kwargs)
     else:
         raise NotImplementedError(f'Unknown state data source {state_data_source}')

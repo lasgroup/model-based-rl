@@ -312,6 +312,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         'dt': env.dt,
         'dynamics_dt': bnn_dt,
         'state_extras_ref': state_extras,
+        'measurement_dt_ratio': measurement_dt_ratio,
     }
 
     config = dict(num_offline_samples=num_offline_samples,
@@ -351,7 +352,6 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     base_agent = DifferentiatingAgent(agent_type=agent_class,
                                       differentiator=BNN_Differentiator,
                                       state_data_source=state_data_source,
-                                      measurement_dt_ratio=measurement_dt_ratio,
                                       **agent_kwargs)
 
     agent_state = base_agent.run_episodes(num_episodes=num_episodes,
