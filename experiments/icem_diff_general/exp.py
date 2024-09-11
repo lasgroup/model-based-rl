@@ -383,14 +383,18 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         extra_fields_shape = (env.observation_size,) * 2 + (1,) * 2
         state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
 
-    opt_params = iCemParams(
-        num_particles=icem_num_particles,
-        num_steps=icem_num_steps,
-        num_samples=icem_num_samples,
-        num_elites=icem_num_elites,
-        exponent=icem_colored_noise_exponent,
-        )
-    
+    if environment == 'bicyle':
+        opt_params = iCemParams(
+            num_particles=icem_num_particles,
+            num_steps=icem_num_steps,
+            num_samples=icem_num_samples,
+            num_elites=icem_num_elites,
+            exponent=icem_colored_noise_exponent)
+    else:
+        opt_params = iCemParams(
+            num_steps=icem_num_steps,
+            exponent=icem_colored_noise_exponent)
+        
     optimizer = iCEMOptimizer(horizon=optimizer_horizon,
                               key = jr.PRNGKey(seed),
                               opt_params=opt_params,
@@ -573,7 +577,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='discrete')
     parser.add_argument('--measurement_dt_ratio', type=int, default=2)
-    parser.add_argument('--log_mode', type=int, default=0)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)
