@@ -115,6 +115,31 @@ class ContinuousOptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
         return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
+    
+    
+class ContinuousMeanDynamics(ContinuousPetsDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution | DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        z = jnp.concatenate([x, u])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        dx_next = model_output.mean
+        x_next = x + dx_next * self.dt
+
+        # Concatenate state and last num_frame_stack actions
+        aleatoric_std = model_output.aleatoric_std * self.dt
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
 
 class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
@@ -293,6 +318,9 @@ class ContinuousOptimisticSystem(ContinuousPetsSystem, Generic[ModelState, Rewar
         reward = reward_dist.sample(seed=key)
         return reward, new_reward_params
 
+class ContinuousMeanSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: ContinuousMeanDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
 
 @chex.dataclass
 class ExplorationRewardParams:

@@ -3,8 +3,11 @@ from mbrl.model_based_agent.system_wrapper.system_wrapper import OptimisticDynam
 from mbrl.model_based_agent.system_wrapper.system_wrapper import WtsScPetsDynamics, WtcScPetsSystem
 from mbrl.model_based_agent.system_wrapper.system_wrapper import WtcScOptimisticDynamics, WtcScOptimisticSystem
 from mbrl.model_based_agent.system_wrapper.system_wrapper import WtsScMeanDynamics, WtcScMeanSystem
+from mbrl.model_based_agent.system_wrapper.system_wrapper import MeanDynamics, MeanSystem
 
 from mbrl.model_based_agent.system_wrapper.system_wrapper import OptimisticExplorationSystem, \
     OptimisticExplorationDynamics, ExplorationReward, ExplorationSystem, ExplorationDynamics
 from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousPetsSystem, ContinuousPetsDynamics
 from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousOptimisticSystem, ContinuousOptimisticDynamics
+from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousMeanDynamics, ContinuousMeanSystem
+
