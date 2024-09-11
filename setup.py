@@ -6,7 +6,8 @@ required = [
     'pandas',
     'mbpo @ git+https://github.com/lasgroup/Model-based-policy-optimizers.git',
     'bsm @ git+https://github.com/lasgroup/bayesian_statistical_models.git',
-    'wtc @ git+ssh://git@github.com/lenarttreven/when_to_control.git',
+    'wtc @ git+https://github.com/lenarttreven/when_to_control.git',
+    # 'wtc @ git+ssh://git@github.com/lenarttreven/when_to_control.git',
     'ray',
 ]
 
