@@ -2,15 +2,15 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_DT_Pendulum_Debug'],
-    'environment': ['pendulum'],#, 'cartpole', 'bicycle'],
+    'project_name': ['ICEM_DeltaT_Sweep'],
+    'environment': ['pendulum', 'cartpole', 'bicycle'],
     'num_offline_samples': [0],
-    'seed': [17],# 42, 69, 420, 1337],
+    'seed': [17, 42, 69, 420, 1337],
     'num_episodes': [30],
     'exploration': ['pets'],
     'reset_statistical_model': [1],
     'regression_model': ['probabilistic_ensemble'],
-    'state_data_source': ['discrete'],#'smoother', 'true', 'discrete'],
+    'state_data_source': ['smoother', 'true', 'discrete'],
     'measurement_dt_ratio': [1, 2, 3, 4, 6, 8, 12],
 }
 
