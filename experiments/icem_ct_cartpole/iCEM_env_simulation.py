@@ -42,7 +42,7 @@ def rollout_actions(
     
     assert actions.shape[0] == horizon
     state = system.reset()
-    state = State(pipeline_state=state.pipeline_state,
+    state = State(pipeline_state=init_state,
                   obs=init_state,
                   reward=state.reward,
                   done=state.done,

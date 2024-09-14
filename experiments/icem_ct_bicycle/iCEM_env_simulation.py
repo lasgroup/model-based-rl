@@ -42,7 +42,7 @@ def rollout_actions(
     
     assert actions.shape[0] == horizon
     state = system.reset()
-    state = State(pipeline_state=state.pipeline_state,
+    state = State(pipeline_state=init_state,
                   obs=init_state,
                   reward=state.reward,
                   done=state.done,
@@ -69,11 +69,11 @@ def rollout_actions(
 if __name__ == '__main__':
 
     opt_params = iCemParams(
-        num_particles=5,
+        num_particles=1,
         num_samples=1000,
         num_elites=100,
-        num_steps=10,
-        exponent=5.0,)
+        num_steps=20,
+        exponent=2.0,)
     
     optimizer = iCemTO(horizon=50,
                        action_dim=2,
@@ -106,14 +106,23 @@ if __name__ == '__main__':
         observations.append(state.obs)
         rewards.append(state.reward)
 
+    observations = jnp.array(observations)
+    actions = jnp.array(actions)
+    rewards = jnp.array(rewards)
+
     # Plot the results
     import matplotlib.pyplot as plt
     fig, axs = plt.subplots(3, 1, figsize=(10, 10))
     time = jnp.arange(0, horizon*dt, dt)
-    axs[0].plot(time, observations)
+    # Plot the observations
+    axs[0].plot(time, observations[:,0], label=r'$pos_x$')
+    axs[0].plot(time, observations[:,1], label=r'$pos_y$')
+    axs[0].plot(time, jnp.arctan2(observations[:,2], observations[:,3]), label=r'$\theta$')
+    axs[0].plot(time, jnp.sqrt(jnp.square(observations[:,4]) + jnp.square(observations[:,5])), label=r'$v$')
+    axs[0].legend()
     axs[0].set_title('Observations')
-    axs[0].legend(env.state_labels)
     axs[0].grid()
+
     axs[1].plot(time, actions)
     axs[1].set_title('Actions')
     axs[1].legend(['Steering', 'Throttle'])
@@ -123,3 +132,16 @@ if __name__ == '__main__':
     axs[2].set_xlabel('Time')
     axs[2].grid()
     plt.savefig('icem_optimizer.png')
+
+    # Plot an x-y trajectory with orientation
+    
+    plt.figure()
+    plt.plot(observations[:, 0], observations[:, 1])
+    plt.quiver(observations[:, 0], observations[:, 1], observations[:, 3], observations[:, 2])
+    plt.grid()
+    plt.title('Trajectory')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.savefig('icem_trajectory.png')
+
