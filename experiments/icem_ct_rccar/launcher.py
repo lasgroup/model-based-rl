@@ -5,7 +5,7 @@ general_configs = {
     'project_name': ['ICEM_RCCar_Perf_Analysis'],
     'num_offline_samples': [0],
     'seed': [17, 42],
-    'num_episodes': [20],
+    'num_episodes': [30],
     'bnn_steps': [48_000],
     'bnn_features': ['64_64', '128_128'],
     'smoother_steps': [32_000],
