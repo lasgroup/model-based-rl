@@ -402,7 +402,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
     parser.add_argument('--measurement_dt_ratio', type=int, default=1)
-    parser.add_argument('--log_mode', type=int, default=0)
+    parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
     main(args)
