@@ -59,7 +59,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     from mbrl.envs.bicyclecar import BicycleEnv
     from mbrl.utils.bicyclecar_utils import BicycleCarReward
     from mbrl.utils.tolerance_reward import ToleranceReward
-    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
+    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from mbrl.utils.offline_data import DifferentiatorOfflineData
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
@@ -232,6 +232,8 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
         agent_class = ContinuousOptimisticModelBasedAgent
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
+    elif exploration == 'mean':
+        agent_class = ContinuousMeanModelBasedAgent
         
 
     class BicycleCarEnvReward(BicycleCarReward):
@@ -369,7 +371,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
-    parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
+    parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=1)
@@ -380,7 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_train_share', type=float, default=1.0)
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='smoother')
-    parser.add_argument('--measurement_dt_ratio', type=int, default=2)
+    parser.add_argument('--measurement_dt_ratio', type=int, default=1)
     parser.add_argument('--log_mode', type=int, default=2)
 
     args = parser.parse_args()
