@@ -2,12 +2,14 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_RCCar_Perf_Analysis'],
+    'project_name': ['ICEM_RCCar_Perf_Analysis2'],
     'num_offline_samples': [0],
-    'seed': [17, 42],
+    'icem_colored_noise_exponent': [1.0, 2.0, 3.0],
+    'seed': [17, 42, 69],
     'num_episodes': [30],
-    'bnn_steps': [48_000],
-    'bnn_features': ['64_64', '128_128'],
+    'bnn_steps': [32_000, 48_000],
+    'bnn_features': ['64_64'],
+    'bnn_use_schedule': [False, True],
     'smoother_steps': [32_000],
     'smoother_features': ['64_64_64'],
     'exploration': ['pets', 'optimistic', 'mean'],
