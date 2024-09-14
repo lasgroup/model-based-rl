@@ -24,6 +24,7 @@ class CartpoleRewardParams:
     control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.02))
     angle_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
     target_angle: chex.Array = struct.field(default_factory=lambda: jnp.array(0.0))
+    pos_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.1))
 
 
 class ContinuousCartpoleEnv(Env):
@@ -95,10 +96,13 @@ class ContinuousCartpoleEnv(Env):
                u: chex.Array) -> chex.Array:
         theta, omega = jnp.arctan2(x[2], x[1]), x[-1]
         target_angle = self.reward_params.target_angle
+        pos, vel = x[0], x[3]
         diff_th = theta - target_angle
         diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
         reward = -(self.reward_params.angle_cost * diff_th ** 2 +
-                   0.1 * omega ** 2) - self.reward_params.control_cost * u ** 2
+                   self.reward_params.pos_cost * pos ** 2 +
+                   0.1 * omega ** 2 + 
+                   0.1 * vel ** 2) - self.reward_params.control_cost * u ** 2
         return reward.squeeze()
     
     def dm_reward(self,

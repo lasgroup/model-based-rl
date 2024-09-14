@@ -258,10 +258,13 @@ def experiment(project_name: str = 'ICEM_CT_Cartpole',
             assert x.shape == (5,) and u.shape == (1,)
             theta, omega = jnp.arctan2(x[2], x[1]), x[-1]
             target_angle = env.reward_params.target_angle
+            pos, vel = x[0], x[3]
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
             reward = -(env.reward_params.angle_cost * diff_th ** 2 +
-                        0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+                       env.reward_params.pos_cost * pos ** 2 +
+                       0.1 * omega ** 2+ 
+                       0.1 * vel ** 2) - env.reward_params.control_cost * u ** 2
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
