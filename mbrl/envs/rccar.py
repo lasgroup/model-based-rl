@@ -179,10 +179,13 @@ class RCCarSimEnv(Env):
 
         next_info = copy.deepcopy(state.info)
         comp_dx = (new_x - x) / self._dt
-        dx = jnp.concatenate([comp_dx[:self._angle_idx],
-                              (jnp.cos(x[self._angle_idx]) * comp_dx[self._angle_idx]).reshape(-1,),
-                              (-1 * jnp.sin(x[self._angle_idx]) * comp_dx[self._angle_idx]).reshape(-1,),
-                              comp_dx[self._angle_idx+1:]])
+        if self.encode_angle:
+            dx = jnp.concatenate([comp_dx[:self._angle_idx],
+                                  (jnp.cos(x[self._angle_idx]) * comp_dx[self._angle_idx]).reshape(-1,),
+                                  (-1 * jnp.sin(x[self._angle_idx]) * comp_dx[self._angle_idx]).reshape(-1,),
+                                  comp_dx[self._angle_idx+1:]])
+        else:
+            dx = comp_dx
         next_info['derivative'] = dx
         next_info['t'] = state.info['t'] + self._dt
         next_info['dt'] = self._dt
