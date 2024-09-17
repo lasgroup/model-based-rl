@@ -159,15 +159,8 @@ class DifferentiatorOfflineData(OfflineData):
         colored_actions = colored_actions.reshape(num_trajectories, self.env.action_size, -1)
         def run_full_sim(init_state, colored_action):
             # init_state has shape (observation_size,), colored_action has shape (action_size, trajectory_length)
-            first_info: dict = {'derivative': jnp.zeros(self.env.observation_size),
-                            't': jnp.array(0.0),
-                            'dt': jnp.array(self.env.dt),
-                            'noise_key': self.env.init_noise_key}
-            brax_state = State(pipeline_state=init_state,
-                     obs=init_state,
-                     reward=jnp.array(0.0),
-                     done=jnp.array(0.0),
-                     info=first_info)
+            # Here we could use the init_state, but that does not work for all environments! (e.g. rccar)
+            brax_state = self.env.reset()
             def f(carry, xs):
                 next_state = self.env.step(carry, xs)
                 return next_state, next_state

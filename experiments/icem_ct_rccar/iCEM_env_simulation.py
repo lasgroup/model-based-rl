@@ -69,7 +69,7 @@ def rollout_actions(
 if __name__ == '__main__':
 
     best_reward = -jnp.inf
-    for i in range(10):
+    for i in range(1):
         opt_params = iCemParams(
             num_particles=1,
             num_samples=1000,
