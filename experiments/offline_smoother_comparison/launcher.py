@@ -2,11 +2,11 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['high_noise_comp'],
-    'environment': ['pendulum', 'cartpole', 'bicycle'],
-    'differentiator': ['BNNSmoother','NumSmoother','PolSmoother'],
+    'project_name': ['increased_noise_comp_prob'],
+    'environment': ['pendulum', 'cartpole'],
+    'differentiator': ['BNNSmoother'],
     'num_offline_samples': [600],
-    'noise_level': [8.0],
+    'noise_level': [4.0],
 }
 
 

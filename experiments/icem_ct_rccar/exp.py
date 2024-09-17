@@ -393,7 +393,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
-    parser.add_argument('--bnn_use_schedule', type=bool, default=True)
+    parser.add_argument('--bnn_use_schedule', type=bool, default=False)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=1)

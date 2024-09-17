@@ -13,6 +13,7 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
                smoother_reg_type: str = 'first',
                smoother_lambda: float = 1e-4,
                smoother_degree: int = 15,
+               use_deterministic: bool = True,
                measurement_dt_ratio: int = 1,
                save_plots: bool = True,
                save_data: bool = False,
@@ -23,19 +24,16 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
     import chex
     import jax.random as jr
 
-    from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
-    from mbrl.envs.bicyclecar import BicycleEnv
-    from mbrl.envs.cartpole import ContinuousCartpoleEnv
-
     from mbrl.utils.offline_data import DifferentiatorOfflineData, save_transitions
 
-    assert environment in ['pendulum', 'bicycle', 'cartpole']
+    assert environment in ['pendulum', 'bicycle', 'cartpole', 'rccar']
     assert differentiator in ['BNNSmoother', 'NumSmoother', 'PolSmoother']
     assert smoother_reg_type in ['zero', 'first', 'second']
 
     noise_key, key = jr.split(jr.PRNGKey(seed), 2)
     # Create the environments with the correct arguments
     if environment == 'pendulum':
+        from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
         if isinstance(noise_level, float):
             noise_level = jnp.array([0.05, 0.1]) * noise_level
         elif isinstance(noise_level, bool):
@@ -51,6 +49,7 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
         init_state_range = jnp.array([[-1.0, 0.0, -1.0], [-1.0, 0.0, 1.0]])
         
     elif environment == 'cartpole':
+        from mbrl.envs.cartpole import ContinuousCartpoleEnv
         if isinstance(noise_level, float):
             noise_level = jnp.array([0.2, 0.05, 0.1, 0.1]) * noise_level
         elif isinstance(noise_level, bool):
@@ -66,6 +65,7 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
         init_state_range = jnp.array([[-1.0, -1.0, 0.0, -1.0, -1.0], [1.0, -1.0, 0.0, 1.0, 1.0]])
         
     elif environment == 'bicycle':
+        from mbrl.envs.bicyclecar import BicycleEnv
         if isinstance(noise_level, float):
             use_obs_noise = True if noise_level > 0 else False
         elif isinstance(noise_level, bool):
@@ -77,13 +77,30 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
                          use_obs_noise=use_obs_noise)
         init_state_range = jnp.concatenate([env.reset().pipeline_state.reshape(1, -1),
                                             env.reset().pipeline_state.reshape(1, -1)], axis=0)
+    elif environment == 'rccar':
+        from mbrl.envs.rccar import RCCarSimEnv
+        if isinstance(noise_level, float):
+            use_obs_noise = True if noise_level > 0 else False
+        elif isinstance(noise_level, bool):
+            use_obs_noise = noise_level
+            noise_level = 1.0
+        elif isinstance(noise_level, list):
+            noise_level = jnp.array(noise_level)
+            use_obs_noise = jnp.any(noise_level > 0)
+            noise_level = jnp.max(jnp.array(noise_level))
+        env = RCCarSimEnv(use_obs_noise=use_obs_noise,
+                          encode_angle=True,
+                          use_tire_model=True,
+                          noise_level=noise_level,)
+        init_state_range = jnp.concatenate([env.reset().obs.reshape(1, -1),
+                                            env.reset().obs.reshape(1, -1)], axis=0)
     else:
         raise NotImplementedError
     
     # Generate the differentiator
     if differentiator == 'BNNSmoother':
         from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator as BNN_Smoother
-        from bsm.bayesian_regression import DeterministicEnsemble
+        from bsm.bayesian_regression import DeterministicEnsemble, ProbabilisticEnsemble
 
         smoother = BNN_Smoother(state_dim=env.observation_size,
                                 output_stds=jnp.ones(shape=(env.observation_size,)) * 0.1,
@@ -91,7 +108,7 @@ def experiment(project_name: str = 'Offline_Smoother_Comparison',
                                 beta=jnp.ones(shape=(env.observation_size,))*2.0,
                                 num_particles=5,
                                 features=smoother_features,
-                                bnn_type=DeterministicEnsemble,
+                                bnn_type=DeterministicEnsemble if use_deterministic else ProbabilisticEnsemble,
                                 train_share=1.0,
                                 num_training_steps=smoother_steps,
                                 weight_decay=smoother_lambda,
@@ -162,6 +179,7 @@ def main(args):
                smoother_reg_type=args.smoother_reg_type,
                smoother_lambda=args.smoother_lambda,
                smoother_degree=args.smoother_degree,
+               use_deterministic=args.use_deterministic,
                measurement_dt_ratio=args.measurement_dt_ratio,
                save_plots=args.save_plots,
                save_data=args.save_data,
@@ -176,18 +194,19 @@ if __name__ == '__main__':
         return list(map(float, value.split('_')))
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='basic_comp')
+    parser.add_argument('--project_name', type=str, default='high_noise_comp_prob')
     parser.add_argument('--environment', type=str, default='pendulum')
-    parser.add_argument('--differentiator', type=str, default='NumSmoother')
+    parser.add_argument('--differentiator', type=str, default='BNNSmoother')
     parser.add_argument('--num_offline_samples', type=int, default=600)
     parser.add_argument('--num_online_samples', type=int, default=200)
-    parser.add_argument('--noise_level', type=float, default=1.0)
+    parser.add_argument('--noise_level', type=float, default=8.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--smoother_steps', type=int, default=64_000)
     parser.add_argument('--smoother_features', type=underscore_to_tuple, default='64_64_64')
     parser.add_argument('--smoother_reg_type', type=str, default='first')
     parser.add_argument('--smoother_lambda', type=float, default=1e-4)
     parser.add_argument('--smoother_degree', type=int, default=15)
+    parser.add_argument('--use_deterministic', type=bool, default=False)
     parser.add_argument('--measurement_dt_ratio', type=int, default=1)
     parser.add_argument('--save_plots', type=bool, default=True)
     parser.add_argument('--save_data', type=bool, default=False)

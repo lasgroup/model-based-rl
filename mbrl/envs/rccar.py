@@ -18,12 +18,11 @@ class RCCarSimEnv(Env):
     _goal: jnp.array = jnp.array([0.0, 0.0, 0.0])
     _init_pose: jnp.array = jnp.array([1.42, -1.04, jnp.pi])
     _angle_idx: int = 2
-    _obs_noise_stds: jnp.array = OBS_NOISE_STD_SIM_CAR
 
     def __init__(self, ctrl_cost_weight: float = 0.005, encode_angle: bool = False, use_obs_noise: bool = True,
                  use_tire_model: bool = False, action_delay: float = 0.0, car_model_params: dict = None,
                  margin_factor: float = 10.0, max_throttle: float = 1.0, car_id: int = 2, ctrl_diff_weight: float = 0.0,
-                 seed: int = 230492394, max_steps: int = 200):
+                 seed: int = 230492394, max_steps: int = 200, noise_level: float | None = None):
         """
         Race car simulator environment
 
@@ -41,6 +40,8 @@ class RCCarSimEnv(Env):
         self._rds_key = jax.random.PRNGKey(seed)
         self.max_throttle = jnp.clip(max_throttle, 0.0, 1.0)
         self.max_steps = max_steps
+
+        self._obs_noise_stds = OBS_NOISE_STD_SIM_CAR*noise_level if noise_level is not None else OBS_NOISE_STD_SIM_CAR
 
         # set car id and corresponding parameters
         assert car_id in [1, 2]
