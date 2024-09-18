@@ -75,12 +75,12 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     env = RCCarSimEnv(seed=seed*2,
                       use_obs_noise=True,
                       encode_angle=True,
-                      use_tire_model=True,
+                      use_tire_model=False,
                       margin_factor=margin_factor)
     
     eval_env = RCCarSimEnv(use_obs_noise=False,
                            encode_angle=True,
-                           use_tire_model=True,
+                           use_tire_model=False,
                            margin_factor=margin_factor)
 
     # Create the BNN num_training_steps schedule
@@ -381,7 +381,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_RCCar_Debug')
-    parser.add_argument('--num_offline_samples', type=int, default=200) # has to be multiple of num_online_samples
+    parser.add_argument('--num_offline_samples', type=int, default=0) # has to be multiple of num_online_samples
     parser.add_argument('--optimizer_horizon', type=int, default=55)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
