@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_RCCar_Perf_Analysis6_Smoother'],
+    'project_name': ['ICEM_RCCar_Perf_Analysis6_NumSmoother'],
     'num_offline_samples': [0, 400],
     'icem_colored_noise_exponent': [1.0, 2.0, 3.0],
     'seed': [17, 42, 69],
@@ -12,10 +12,10 @@ general_configs = {
     'bnn_use_schedule': [False],
     'smoother_steps': [64_000],
     'smoother_features': ['64_64_64'],
-    'smoother_weight_decay': [0.0],
+    'smoother_weight_decay': [1e-5],
     'exploration': ['pets', 'optimistic'],
     'reset_statistical_model': [0],
-    'state_data_source': ['true'],
+    'state_data_source': ['smoother','true'],
     'regression_model': ['probabilistic_ensemble'],
 }
 

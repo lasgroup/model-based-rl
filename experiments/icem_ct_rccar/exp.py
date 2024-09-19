@@ -198,7 +198,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                                   jnp.sin(env._init_pose[2]).reshape(-1,),
                                   jnp.cos(env._init_pose[2]).reshape(-1,),
                                   jnp.zeros((3,)) ]).reshape(1,-1)
-    offline_data_gen = DifferentiatorOfflineData(differentiator=BNN_Differentiator,
+    offline_data_gen = DifferentiatorOfflineData(differentiator=Num_Differentiator,
                                                  env=env,
                                                  init_state_range=jnp.concatenate([init_state, init_state], axis=0))
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
@@ -334,7 +334,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
                    config=config)
 
     base_agent = DifferentiatingAgent(agent_type=agent_class,
-                                      differentiator=BNN_Differentiator,
+                                      differentiator=Num_Differentiator,
                                       state_data_source=state_data_source,
                                       **agent_kwargs)
 
