@@ -78,6 +78,34 @@ class PetsDynamics(Dynamics, Generic[ModelState]):
         param_key, model_state_key = jr.split(key, 2)
         model_state = self.statistical_model.init(model_state_key)
         return DynamicsParams(key=key, statistical_model_state=model_state)
+    
+
+class MeanDynamics(PetsDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # Create state-action pair
+        z = jnp.concatenate([x, u])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        if self.predict_difference:
+            x_next = x + model_output.mean
+        else:
+            x_next = model_output.mean
+        
+        # Concatenate state and last num_frame_stack actions
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        aleatoric_std = model_output.aleatoric_std
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
 
 class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
@@ -503,6 +531,11 @@ class OptimisticSystem(PetsSystem, Generic[ModelState, RewardParams]):
         reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], reward_params, x_next)
         reward = reward_dist.sample(seed=key)
         return reward, new_reward_params
+
+
+class MeanSystem(PetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: MeanDynamics[ModelState], reward: Reward[RewardParams]):
+        super().__init__(dynamics, reward)
 
 
 class WtcScPetsSystem(System, Generic[ModelState, RewardParams]):

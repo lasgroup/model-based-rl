@@ -4,6 +4,7 @@ from brax.envs.base import PipelineEnv, State, Env
 import chex
 from flax import struct
 import jax.numpy as jnp
+import jax.random as jr
 from jaxtyping import Float, Array
 from functools import partial
 import copy
@@ -37,13 +38,19 @@ class PendulumRewardParams(RewardParams):
 
 
 class ContinuousPendulumEnv(Env):
-    def __init__(self, reward_source: str = 'gym'):
+    def __init__(self, reward_source: str = 'gym',
+                 noise_level: chex.Array | None = None,
+                 init_noise_key: chex.PRNGKey | None = None):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
         bound = 0.1
         value_at_margin = 0.1
         margin_factor = 10.0
         self.reward_source = reward_source  # 'dm-control' or 'gym'
+        self.noise_level = noise_level      # Noise level can have one value (for both angle and speed) or two separate values
+        self.init_noise_key = init_noise_key
+        self.state_labels = [r'$cos(\theta)$', r'$sin(\theta)$', r'$\omega$']
+        self.state_derivative_labels = [r'$-sin(\theta) \dot{\theta}$', r'$cos(\theta) \dot{\theta}$', r'$\ddot{\theta}$']
         self.tolerance_reward = ToleranceReward(bounds=(0.0, bound),
                                                 margin=margin_factor * bound,
                                                 value_at_margin=value_at_margin,
@@ -53,8 +60,9 @@ class ContinuousPendulumEnv(Env):
               rng: jax.Array | None = None) -> State:
         first_info: dict = {'derivative': jnp.array([0.0, 0.0, 0.0]),
                             't': jnp.array(0.0),
-                            'dt': jnp.array(self.dynamics_params.dt)}
-        return State(pipeline_state=base.State(jnp.array([-1.0, 0.0, 0.0]), jnp.array([0.0, 0.0, 0.0]), None, None, None),
+                            'dt': jnp.array(self.dynamics_params.dt),
+                            'noise_key': self.init_noise_key}
+        return State(pipeline_state=jnp.array([-1.0, 0.0, 0.0]),
                      obs=jnp.array([-1.0, 0.0, 0.0]),
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0),
@@ -88,7 +96,7 @@ class ContinuousPendulumEnv(Env):
     def step(self,
              state: State,
              action: jax.Array) -> State:
-        x = state.obs
+        x = state.pipeline_state
         chex.assert_shape(x, (self.observation_size,))
         chex.assert_shape(action, (self.action_size,))
         th = jnp.arctan2(x[1], x[0])
@@ -96,7 +104,7 @@ class ContinuousPendulumEnv(Env):
         dt = self.dynamics_params.dt
         x_compressed = jnp.array([th, thdot])
         dx_compressed = self.ode(x_compressed, action)
-        newth = th + dx_compressed[0] * dt
+        newth = th + thdot.reshape(-1,)*dt #dx_compressed[0] * dt
         newthdot = thdot + dx_compressed[-1] * dt # Compute dx with this?
         newthdot = jnp.clip(newthdot, -self.dynamics_params.max_speed, self.dynamics_params.max_speed) # == dx_compressed[0]
         dx = jnp.asarray([-jnp.sin(th)*newthdot, jnp.cos(th)*newthdot, (newthdot - thdot)/dt]).reshape(-1)
@@ -113,8 +121,15 @@ class ContinuousPendulumEnv(Env):
         next_info['t'] = state.info['t'] + dt
         next_info['dt'] = dt
 
-        next_state = State(pipeline_state=base.State(q=x, qd=dx, x=None, xd=None, contact=None),
-                           obs=next_obs,
+        if self.noise_level is not None:
+            key, subkey = jr.split(state.info['noise_key'], 2)
+            noisy_newth = newth + self.noise_level[0] * jr.normal(key=subkey)
+            noisy_newthdot = newthdot + self.noise_level[-1] * jr.normal(key=subkey)
+            noisy_obs = jnp.asarray([jnp.cos(noisy_newth), jnp.sin(noisy_newth), noisy_newthdot]).reshape(-1)
+            next_info['noise_key'] = key
+
+        next_state = State(pipeline_state=next_obs,
+                           obs=noisy_obs if self.noise_level is not None else next_obs,
                            reward=next_reward,
                            done=state.done,
                            metrics=state.metrics,

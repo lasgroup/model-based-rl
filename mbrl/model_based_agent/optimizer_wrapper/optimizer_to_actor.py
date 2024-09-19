@@ -61,6 +61,18 @@ class PetsActor(Actor):
             evaluate: bool = True
             ) -> Tuple[chex.Array, OptimizerState]:
         return self.optimizer.act(obs, opt_state, evaluate)
+    
+
+class MeanActor(Actor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def act(self,
+            obs: chex.Array,
+            opt_state: OptimizerState[RewardParams, DynamicsParams],
+            evaluate: bool = True
+            ) -> Tuple[chex.Array, OptimizerState]:
+        return self.optimizer.act(obs, opt_state, evaluate)
 
 
 class OptimisticActor(Actor):
