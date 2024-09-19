@@ -12,10 +12,10 @@ general_configs = {
     'bnn_use_schedule': [False],
     'smoother_steps': [64_000],
     'smoother_features': ['64_64_64'],
-    'smoother_weight_decay': [0.0, 1e-5, 1e-4, 1e-3],
+    'smoother_weight_decay': [0.0],
     'exploration': ['pets', 'optimistic'],
     'reset_statistical_model': [0],
-    'state_data_source': ['smoother'],
+    'state_data_source': ['true'],
     'regression_model': ['probabilistic_ensemble'],
 }
 
