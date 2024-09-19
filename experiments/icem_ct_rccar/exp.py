@@ -75,12 +75,12 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     env = RCCarSimEnv(seed=seed*2,
                       use_obs_noise=True,
                       encode_angle=True,
-                      use_tire_model=False,
+                      use_tire_model=True,
                       margin_factor=margin_factor)
     
     eval_env = RCCarSimEnv(use_obs_noise=False,
                            encode_angle=True,
-                           use_tire_model=False,
+                           use_tire_model=True,
                            margin_factor=margin_factor)
 
     # Create the BNN num_training_steps schedule
