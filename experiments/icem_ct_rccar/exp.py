@@ -63,6 +63,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from mbrl.utils.offline_data import DifferentiatorOfflineData
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
+    from diff_smoothers.Numerical_Differentiator import TikhonovDifferentiator
     
     jax.config.update('jax_enable_x64', True)
 
@@ -179,17 +180,20 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
     discount_factor = 0.99
 
     BNN_Differentiator = BNNSmootherDifferentiator(state_dim=env.observation_size,
-                                               output_stds=jnp.ones(shape=(env.observation_size,)) * 0.1,
+                                               output_stds=jnp.ones(shape=(env.observation_size,)),
                                                logging_wandb=False,
                                                beta=jnp.ones(shape=(env.observation_size,))*2,
                                                num_particles=5,
                                                features=smoother_features,
-                                               bnn_type=DeterministicEnsemble,
+                                               bnn_type=ProbabilisticEnsemble,
                                                train_share=smoother_train_share,
                                                num_training_steps=smoother_steps,
                                                weight_decay=smoother_weight_decay,
                                                return_best_model=True,
                                                eval_frequency=1_000,)
+    Num_Differentiator = TikhonovDifferentiator(state_dim=env.observation_size,
+                                                regtype='first',
+                                                lambda_=smoother_weight_decay,)
     init_state = jnp.concatenate([env._init_pose[:2],
                                   jnp.sin(env._init_pose[2]).reshape(-1,),
                                   jnp.cos(env._init_pose[2]).reshape(-1,),
