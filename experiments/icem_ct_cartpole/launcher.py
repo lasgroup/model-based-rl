@@ -2,22 +2,23 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_Pendulum_Sweep_0828'],
+    'project_name': ['ICEM_Cartpole_Sweep_0920'],
     'num_offline_samples': [0],
     'optimizer_horizon': [20],
     'icem_num_steps': [10],
-    'noise_level': ['0.1_0.1', '0.2_0.2', '0.4_0.5', '0.6_1.0'],
-    'seed': [42],
+    'icem_num_particles': [1, 5, 10],
+    'noise_level': ['0.1_0.1'],
+    'seed': [17, 42, 69],
     'num_episodes': [20],
     'bnn_steps': [48_000],
     'bnn_features': ['64_64'],
-    'smoother_steps': [32_000, 48_000, 64_000],
-    'smoother_features': ['64_64', '128_128', '64_64_64'],
-    'exploration': ['pets', 'optimistic'],
+    'bnn_weight_decay': [1e-4],
+    'smoother_steps': [64_000],
+    'smoother_features': ['64_64_64'],
+    'exploration': ['pets', 'optimistic', 'mean'],
     'reset_statistical_model': [1],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
-    'bnn_weight_decay': [0.0],
 }
 
 

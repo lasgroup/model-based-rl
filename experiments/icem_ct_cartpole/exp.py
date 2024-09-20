@@ -16,11 +16,12 @@ def experiment(project_name: str = 'ICEM_CT_Cartpole',
                noise_level: list = [0.2, 0.05, 0.1, 0.1],
                icem_num_steps: int = 10,
                icem_colored_noise_exponent: float = 3.0,
+               icem_num_particles: int = 5,
                reward_source: str = 'gym',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
-               bnn_use_schedule: bool = True,
+               bnn_use_schedule: bool = False,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -57,14 +58,14 @@ def experiment(project_name: str = 'ICEM_CT_Cartpole',
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
     from mbrl.envs.cartpole import ContinuousCartpoleEnv
-    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
+    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
     from mbrl.model_based_agent.differentiating_agent import DifferentiatingAgent
     from diff_smoothers.BNN_Differentiator import BNNSmootherDifferentiator
     
     jax.config.update('jax_enable_x64', True)
 
     assert exploration in ['optimistic',
-                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+                           'pets', 'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
 
@@ -206,6 +207,7 @@ def experiment(project_name: str = 'ICEM_CT_Cartpole',
         sample_batch_size=1)
 
     opt_params = iCemParams(
+        num_particles=icem_num_particles,
         num_steps=icem_num_steps,
         exponent=icem_colored_noise_exponent,
         )
@@ -220,6 +222,8 @@ def experiment(project_name: str = 'ICEM_CT_Cartpole',
         agent_class = ContinuousOptimisticModelBasedAgent
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
+    elif exploration == 'mean':
+        agent_class = ContinuousMeanModelBasedAgent
 
     class DMCartpoleReward(Reward):
         def __init__(self):
@@ -353,6 +357,7 @@ def main(args):
                noise_level=args.noise_level,
                icem_num_steps=args.icem_num_steps,
                icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+               icem_num_particles=args.icem_num_particles,
                reward_source=args.reward_source,
                seed=args.seed,
                num_episodes=args.num_episodes,
@@ -392,13 +397,14 @@ if __name__ == '__main__':
     parser.add_argument('--noise_level', type=underscore_to_list, default='0.2_0.05_0.1_0.1')
     parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
+    parser.add_argument('--icem_num_particles', type=int, default=5)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=20)
     parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
-    parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
+    parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
     parser.add_argument('--exploration', type=str, default='pets')
     parser.add_argument('--reset_statistical_model', type=int, default=1)

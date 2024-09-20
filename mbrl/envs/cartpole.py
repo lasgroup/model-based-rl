@@ -24,7 +24,7 @@ class CartpoleRewardParams:
     control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.02))
     angle_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
     target_angle: chex.Array = struct.field(default_factory=lambda: jnp.array(0.0))
-    pos_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.1))
+    pos_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.5))
 
 
 class ContinuousCartpoleEnv(Env):
