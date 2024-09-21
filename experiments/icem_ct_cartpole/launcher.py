@@ -7,7 +7,7 @@ general_configs = {
     'optimizer_horizon': [20],
     'icem_num_steps': [10],
     'icem_num_particles': [1, 5, 10],
-    'noise_level': ['0.1_0.1'],
+    'noise_level': ['0.2_0.05_0.1_0.1'],
     'seed': [17, 42, 69],
     'num_episodes': [20],
     'bnn_steps': [48_000],
