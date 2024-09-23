@@ -12,10 +12,10 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                environment: str = 'pendulum',
                num_offline_samples: int = 0,
                optimizer_horizon: int = 20,
-               num_online_samples: int = 200,
+               num_online_samples: int = 100,
                deterministic_policy_for_data_collection: bool = False,
                noise_level: float | None = None,
-               icem_num_particles: int = 5,
+               icem_num_particles: int = 1,
                icem_num_steps: int = 10,
                icem_num_samples: int = 1000,
                icem_num_elites: int = 100,
@@ -24,7 +24,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
-               bnn_use_schedule: bool = True,
+               bnn_use_schedule: bool = False,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -68,7 +68,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD']
     assert reward_source in ['dm-control', 'gym']
-    assert environment in ['pendulum', 'cartpole', 'bicycle']
+    assert environment in ['pendulum', 'cartpole', 'bicycle', 'rccar']
     assert state_data_source in ['discrete', 'smoother', 'true']
 
     # ------------------------------------------------------------------
@@ -144,7 +144,6 @@ def experiment(project_name: str = 'ICEM_Pendulum',
 
     elif environment == 'cartpole':
         from mbrl.envs.cartpole import ContinuousCartpoleEnv
-        from mbrl.utils.bicyclecar_utils import BicycleCarReward
         if noise_level is not None:
             noise_level = jnp.array([0.2, 0.05, 0.1, 0.1]) * noise_level
             env = ContinuousCartpoleEnv(reward_source=reward_source,
@@ -155,30 +154,6 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         eval_env = ContinuousCartpoleEnv(reward_source=reward_source)
 
         init_state_range = jnp.array([[-1.0, -1.0, 0.0, -1.0, -1.0], [1.0, -1.0, 0.0, 1.0, 1.0]])
-
-        class DMCartpoleReward(Reward):
-            def __init__(self):
-                super().__init__(x_dim=3, u_dim=1)
-
-            def __call__(self,
-                        x: chex.Array,
-                        u: chex.Array,
-                        reward_params: RewardParams,
-                        x_next: chex.Array | None = None
-                        ):
-                assert x.shape == (5,) and u.shape == (1,)
-                theta, omega = jnp.arctan2(x[2], x[1]), x[-1]
-                target_angle = env.reward_params.target_angle
-                diff_th = theta - target_angle
-                diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-                reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                    0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
-                reward = reward.squeeze()
-                reward_dist = Normal(reward, jnp.zeros_like(reward))
-                return reward_dist, reward_params
-
-            def init_params(self, key: chex.PRNGKey) -> RewardParams:
-                return {'dt': env.dt}
             
         class GymCartpoleReward(Reward):
             def __init__(self):
@@ -193,10 +168,13 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                 assert x.shape == (5,) and u.shape == (1,)
                 theta, omega = jnp.arctan2(x[2], x[1]), x[-1]
                 target_angle = env.reward_params.target_angle
+                pos, vel = x[0], x[3]
                 diff_th = theta - target_angle
                 diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
                 reward = -(env.reward_params.angle_cost * diff_th ** 2 +
-                            0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+                           env.reward_params.pos_cost * pos ** 2 +
+                           0.1 * omega ** 2+ 
+                           0.1 * vel ** 2) - env.reward_params.control_cost * u ** 2
                 reward = reward.squeeze()
                 reward_dist = Normal(reward, jnp.zeros_like(reward))
                 return reward_dist, reward_params
@@ -205,7 +183,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                 return {'dt': env.dt}
 
         if reward_source == 'dm-control':
-            reward_model = DMCartpoleReward()
+            raise NotImplementedError('DM-Control reward not implemented for Cartpole')
         elif reward_source == 'gym':
             reward_model = GymCartpoleReward()
         else:   
@@ -224,6 +202,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         init_state_range = jnp.concatenate([env.reset().pipeline_state.reshape(1, -1),
                                             env.reset().pipeline_state.reshape(1, -1)], axis=0)
         
+        from mbrl.utils.bicyclecar_utils import BicycleCarReward
         class BicycleCarEnvReward(BicycleCarReward):
             def __init__(self, action_cost: float = 0.0):
                 super().__init__(goal = env.goal,
@@ -243,6 +222,59 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                 return {'dt': env.dt}
         
         reward_model = BicycleCarEnvReward()
+
+    elif environment == 'rccar':
+        from mbrl.envs.rccar import RCCarSimEnv
+        if noise_level is not None:
+            use_obs_noise = True
+        else:
+            use_obs_noise = False
+
+        # Set environment specific parameters
+        margin_factor = 20
+        num_online_samples = 200
+
+        env = RCCarSimEnv(init_noise_key=jr.PRNGKey(seed=seed*2),
+                          use_obs_noise=use_obs_noise,
+                          encode_angle=True,
+                          use_tire_model=True,
+                          margin_factor=margin_factor)
+        eval_env = RCCarSimEnv(use_obs_noise=False,
+                               encode_angle=True,
+                               use_tire_model=True,
+                               margin_factor=margin_factor)
+        
+        init_state_range = jnp.concatenate([env.reset().pipeline_state.reshape(1, -1),
+                                            env.reset().pipeline_state.reshape(1, -1)], axis=0)
+        
+        
+        from mbrl.utils.rccar_utils import RCCarEnvReward
+        class RCCarReward(RCCarEnvReward):
+            def __init__(self,
+                        ctrl_cost_weight: float,
+                        encode_angle: bool,
+                        margin_factor: float):
+                super().__init__(goal=env._goal,
+                                ctrl_cost_weight=ctrl_cost_weight,
+                                encode_angle=encode_angle,
+                                margin_factor=margin_factor)
+                
+            def __call__(self,
+                        x: chex.Array,
+                        u: chex.Array,
+                        reward_params: RewardParams,
+                        x_next: chex.Array | None = None):
+                """ Computes the reward for the given transition """
+                reward = self.forward(x, u, x_next)
+                reward_dist = Normal(reward, jnp.zeros_like(reward))
+                return reward_dist, reward_params
+            
+            def init_params(self, key: chex.PRNGKey) -> RewardParams:
+                return {'dt': env.dt}
+            
+        reward_model = RCCarReward(ctrl_cost_weight=env._reward_model.ctrl_cost_weight,
+                                   encode_angle=env._reward_model.encode_angle,
+                                   margin_factor=margin_factor)
 
     else:
         raise NotImplementedError(f'Unknown environment {environment}')
@@ -383,17 +415,39 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         extra_fields_shape = (env.observation_size,) * 2 + (1,) * 2
         state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
 
-    if environment == 'bicyle':
+    # Change the optimizer parameters based on the environments
+    if environment == 'bicyle' or 'rccar':
+        icem_num_steps = 30
         opt_params = iCemParams(
             num_particles=icem_num_particles,
             num_steps=icem_num_steps,
             num_samples=icem_num_samples,
             num_elites=icem_num_elites,
             exponent=icem_colored_noise_exponent)
-    else:
+        optimizer_horizon = 55
+
+    elif environment == 'pendulum':
+        icem_num_steps = 10
         opt_params = iCemParams(
+            num_particles=icem_num_particles,
             num_steps=icem_num_steps,
+            num_samples=icem_num_samples,
+            num_elites=icem_num_elites,
             exponent=icem_colored_noise_exponent)
+        optimizer_horizon = 25,
+    
+    elif environment == 'cartpole':
+        icem_num_steps = 10
+        opt_params = iCemParams(
+            num_particles=icem_num_particles,
+            num_steps=icem_num_steps,
+            num_samples=icem_num_samples,
+            num_elites=icem_num_elites,
+            exponent=icem_colored_noise_exponent)
+        optimizer_horizon = 35
+
+    else:
+        raise NotImplementedError(f'Unknown environment {environment}')
         
     optimizer = iCEMOptimizer(horizon=optimizer_horizon,
                               key = jr.PRNGKey(seed),
@@ -470,7 +524,6 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                   bnn_features=bnn_features,
                   bnn_train_share=bnn_train_share,
                   bnn_weight_decay=bnn_weight_decay,
-                  first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
@@ -515,12 +568,9 @@ def experiment(project_name: str = 'ICEM_Pendulum',
 def main(args):
     experiment(project_name=args.project_name,
                environment=args.environment,
-               num_offline_samples=args.num_offline_samples,
-               optimizer_horizon=args.optimizer_horizon,
                num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                noise_level=args.noise_level,
-               icem_num_steps=args.icem_num_steps,
                icem_colored_noise_exponent=args.icem_colored_noise_exponent,
                reward_source=args.reward_source,
                seed=args.seed,
@@ -529,7 +579,6 @@ def main(args):
                bnn_features=args.bnn_features,
                bnn_train_share=args.bnn_train_share,
                bnn_weight_decay=args.bnn_weight_decay,
-               first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
@@ -553,11 +602,8 @@ if __name__ == '__main__':
     parser.add_argument('--project_name', type=str, default='ICEM_Diff_General')
     parser.add_argument('--environment', type=str, default='pendulum')
     parser.add_argument('--num_offline_samples', type=int, default=0)
-    parser.add_argument('--optimizer_horizon', type=int, default=20)
-    parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--noise_level', type=float, default=1.0)
-    parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=2.0)
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--seed', type=int, default=42)
@@ -565,10 +611,9 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_steps', type=int, default=48_000)
     parser.add_argument('--bnn_features', type=underscore_to_tuple, default='64_64')
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
-    parser.add_argument('--bnn_weight_decay', type=float, default=0.0)
-    parser.add_argument('--first_episode_for_policy_training', type=int, default=1)
+    parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--exploration', type=str, default='pets')
-    parser.add_argument('--reset_statistical_model', type=int, default=1)
+    parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--smoother_steps', type=int, default=64_000)

@@ -232,7 +232,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
 
     opt_params = iCemParams(
         num_steps=icem_num_steps,
-        num_elites=60,
+        num_elites=100,
         num_samples=1000,
         num_particles=5,
         exponent=icem_colored_noise_exponent,
@@ -252,7 +252,7 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
         agent_class = ContinuousMeanModelBasedAgent
         
 
-    class RCCarEnvReward(RCCarEnvReward):
+    class RCCarReward(RCCarEnvReward):
         def __init__(self,
                      ctrl_cost_weight: float,
                      encode_angle: bool,
@@ -275,9 +275,9 @@ def experiment(project_name: str = 'ICEM_CT_RCCar',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
-    reward_model = RCCarEnvReward(ctrl_cost_weight=env._reward_model.ctrl_cost_weight,
-                                  encode_angle=env._reward_model.encode_angle,
-                                  margin_factor=margin_factor,)
+    reward_model = RCCarReward(ctrl_cost_weight=env._reward_model.ctrl_cost_weight,
+                               encode_angle=env._reward_model.encode_angle,
+                               margin_factor=margin_factor,)
     
     agent_kwargs = {
         'env': env,
