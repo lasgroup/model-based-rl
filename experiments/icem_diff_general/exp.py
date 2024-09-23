@@ -568,7 +568,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
 def main(args):
     experiment(project_name=args.project_name,
                environment=args.environment,
-               num_online_samples=args.num_online_samples,
+               num_offline_samples=args.num_offline_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                noise_level=args.noise_level,
                icem_colored_noise_exponent=args.icem_colored_noise_exponent,
