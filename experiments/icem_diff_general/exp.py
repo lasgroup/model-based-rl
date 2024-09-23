@@ -416,7 +416,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         state_extras: dict = {x: jnp.zeros(shape=(y,)) for x, y in zip(extra_fields, extra_fields_shape)}
 
     # Change the optimizer parameters based on the environments
-    if environment == 'bicyle' or 'rccar':
+    if environment == 'rccar':
         icem_num_steps = 30
         opt_params = iCemParams(
             num_particles=icem_num_particles,
