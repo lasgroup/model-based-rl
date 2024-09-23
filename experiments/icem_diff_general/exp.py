@@ -234,7 +234,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         margin_factor = 20
         num_online_samples = 200
 
-        env = RCCarSimEnv(init_noise_key=jr.PRNGKey(seed=seed*2),
+        env = RCCarSimEnv(seed=seed*2,
                           use_obs_noise=use_obs_noise,
                           encode_angle=True,
                           use_tire_model=True,
