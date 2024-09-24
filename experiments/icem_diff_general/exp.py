@@ -86,6 +86,8 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
         init_state_range = jnp.array([[-1.0, 0.0, -1.0], [-1.0, 0.0, 1.0]])
+        smoother_features = (64, 64)
+        smoother_steps = 48_000
 
         class DMPendulumReward(Reward):
             def __init__(self):
@@ -154,6 +156,8 @@ def experiment(project_name: str = 'ICEM_Pendulum',
         eval_env = ContinuousCartpoleEnv(reward_source=reward_source)
 
         init_state_range = jnp.array([[-1.0, -1.0, 0.0, -1.0, -1.0], [1.0, -1.0, 0.0, 1.0, 1.0]])
+        smoother_features = (64, 64)
+        smoother_steps = 48_000
             
         class GymCartpoleReward(Reward):
             def __init__(self):
@@ -434,7 +438,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
             num_samples=icem_num_samples,
             num_elites=icem_num_elites,
             exponent=icem_colored_noise_exponent)
-        optimizer_horizon = 25
+        optimizer_horizon = 20
     
     elif environment == 'cartpole':
         icem_num_steps = 10
@@ -444,7 +448,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
             num_samples=icem_num_samples,
             num_elites=icem_num_elites,
             exponent=icem_colored_noise_exponent)
-        optimizer_horizon = 35
+        optimizer_horizon = 20
 
     else:
         raise NotImplementedError(f'Unknown environment {environment}')

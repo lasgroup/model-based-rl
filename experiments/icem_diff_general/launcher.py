@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_DeltaT_Sweep_2'],
+    'project_name': ['ICEM_DeltaT_Sweep_4'],
     'environment': ['pendulum', 'cartpole', 'rccar'],
     'num_offline_samples': [0],
     'seed': [17, 42, 69, 420, 1337],
@@ -25,7 +25,7 @@ def main():
     generate_run_commands(command_list,
                           num_cpus=1,
                           num_gpus=1,
-                          mode='euler',
+                          mode='local',
                           duration='23:59:00',
                           prompt=True,
                           mem=16000)
