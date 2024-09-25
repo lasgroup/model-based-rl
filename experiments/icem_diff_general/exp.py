@@ -24,7 +24,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 50_000,
-               bnn_use_schedule: bool = False,
+               bnn_use_schedule: bool = True,
                bnn_features: tuple = (256,) * 2,
                bnn_train_share: float = 0.8,
                bnn_weight_decay: float = 1e-4,
@@ -85,9 +85,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
             env = ContinuousPendulumEnv(reward_source=reward_source)
         eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
-        init_state_range = jnp.array([[-1.0, 0.0, -1.0], [-1.0, 0.0, 1.0]])
-        smoother_features = (64, 64)
-        smoother_steps = 48_000
+        init_state_range = jnp.array([[-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
 
         class DMPendulumReward(Reward):
             def __init__(self):
@@ -155,9 +153,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
             env = ContinuousCartpoleEnv(reward_source=reward_source)
         eval_env = ContinuousCartpoleEnv(reward_source=reward_source)
 
-        init_state_range = jnp.array([[-1.0, -1.0, 0.0, -1.0, -1.0], [1.0, -1.0, 0.0, 1.0, 1.0]])
-        smoother_features = (64, 64)
-        smoother_steps = 48_000
+        init_state_range = jnp.array([[0.0, -1.0, 0.0, 0.0, 0.0], [0.0, -1.0, 0.0, 0.0, 0.0]])
             
         class GymCartpoleReward(Reward):
             def __init__(self):
@@ -617,7 +613,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--exploration', type=str, default='pets')
-    parser.add_argument('--reset_statistical_model', type=int, default=0)
+    parser.add_argument('--reset_statistical_model', type=int, default=1)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--smoother_steps', type=int, default=64_000)
