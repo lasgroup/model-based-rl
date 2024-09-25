@@ -12,7 +12,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                environment: str = 'pendulum',
                num_offline_samples: int = 0,
                optimizer_horizon: int = 20,
-               num_online_samples: int = 100,
+               num_online_samples: int = 200,
                deterministic_policy_for_data_collection: bool = False,
                noise_level: float | None = None,
                icem_num_particles: int = 1,
@@ -613,7 +613,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_train_share', type=float, default=0.8)
     parser.add_argument('--bnn_weight_decay', type=float, default=1e-4)
     parser.add_argument('--exploration', type=str, default='pets')
-    parser.add_argument('--reset_statistical_model', type=int, default=1)
+    parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--smoother_steps', type=int, default=64_000)

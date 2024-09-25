@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['ICEM_DeltaT_Sweep_5'],
+    'project_name': ['ICEM_DeltaT_Sweep_6'],
     'environment': ['pendulum', 'cartpole'],
     'num_offline_samples': [0],
     'seed': [17, 42, 69, 420, 1337],
