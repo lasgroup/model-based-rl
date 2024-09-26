@@ -535,7 +535,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
                   state_data_source=state_data_source,
                   measurement_dt_ratio=measurement_dt_ratio,
                   load_offline_data=load_offline_data,
-                  agent_kwargs=agent_kwargs,
+                  #agent_kwargs=agent_kwargs,
                   )
     
     if log_mode > 0:
@@ -622,7 +622,7 @@ if __name__ == '__main__':
     parser.add_argument('--smoother_weight_decay', type=float, default=1e-4)
     parser.add_argument('--state_data_source', type=str, default='discrete')
     parser.add_argument('--measurement_dt_ratio', type=int, default=1)
-    parser.add_argument('--log_mode', type=int, default=2)
+    parser.add_argument('--log_mode', type=int, default=1)
 
     args = parser.parse_args()
     main(args)

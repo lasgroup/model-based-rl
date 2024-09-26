@@ -4,7 +4,7 @@ from experiments.util import generate_run_commands, generate_base_command, dict_
 general_configs = {
     'project_name': ['ICEM_DeltaT_Sweep_6'],
     'environment': ['pendulum', 'cartpole'],
-    'num_offline_samples': [0],
+    'num_offline_samples': [2000],
     'seed': [17, 42, 69, 420, 1337],
     'num_episodes': [30],
     'exploration': ['pets'],
