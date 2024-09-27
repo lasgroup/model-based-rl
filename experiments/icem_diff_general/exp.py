@@ -445,7 +445,7 @@ def experiment(project_name: str = 'ICEM_Pendulum',
             num_samples=icem_num_samples,
             num_elites=icem_num_elites,
             exponent=icem_colored_noise_exponent)
-        optimizer_horizon = 20
+        optimizer_horizon = 30
 
     else:
         raise NotImplementedError(f'Unknown environment {environment}')
@@ -601,7 +601,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='ICEM_Diff_General')
-    parser.add_argument('--environment', type=str, default='pendulum')
+    parser.add_argument('--environment', type=str, default='cartpole')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=1)
     parser.add_argument('--noise_level', type=float, default=1.0)
