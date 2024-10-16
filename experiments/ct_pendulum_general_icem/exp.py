@@ -2,13 +2,17 @@ import argparse
 ENTITY = 'kiten'
 
 
-def experiment(project_name: str = 'CT_Pendulum',
-               num_offline_samples: int = 100,
-               sac_horizon: int = 100,
+def experiment(project_name: str = 'ICEM_CT_Pendulum',
+               num_offline_samples: int = 0,
+               optimizer_horizon: int = 100,
+               num_online_samples: int = 200,
                deterministic_policy_for_data_collection: bool = False,
+               noise_level: list = [0.1, 0.1],
+               icem_num_steps: int = 10,
+               icem_colored_noise_exponent: float = 3.0,
+               reward_source = 'dm-control',
                seed: int = 42,
                num_episodes: int = 20,
-               sac_steps: int = 1_000_000,
                bnn_steps: int = 5_000,
                first_episode_for_policy_training: int = -1,
                exploration: str = 'pets',  # Should be one of the ['optimistic', 'pets', 'mean'],
@@ -30,9 +34,9 @@ def experiment(project_name: str = 'CT_Pendulum',
     from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
     from distrax import Normal
     from jax.nn import swish
-    from mbpo.optimizers import SACOptimizer
+    from mbrl.utils.icem_brax_wrapper import iCEMOptimizer
+    from mbrl.utils.icem import iCemParams
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 
@@ -42,13 +46,18 @@ def experiment(project_name: str = 'CT_Pendulum',
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
+    assert reward_source in ['dm-control', 'gym']
 
     config = dict(num_offline_samples=num_offline_samples,
-                  sac_horizon=sac_horizon,
+                optimizer_horizon=optimizer_horizon,
+                  num_online_samples=num_online_samples,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  noise_level=noise_level,
                   seed=seed,
                   num_episodes=num_episodes,
-                  sac_steps=sac_steps,
+                  icem_num_steps=icem_num_steps,
+                  icem_colored_noise_exponent=icem_colored_noise_exponent,
+                  reward_source=reward_source,
                   bnn_steps=bnn_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
@@ -58,12 +67,19 @@ def experiment(project_name: str = 'CT_Pendulum',
                   weight_decay=weight_decay
                   )
 
-    env = ContinuousPendulumEnv(reward_source='dm-control')
+    env = ContinuousPendulumEnv(reward_source=reward_source,
+                                noise_level=jnp.array(noise_level),
+                                init_noise_key=jr.PRNGKey(12))
+    
+    eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
-    offline_data = None
-    horizon = 200
+    if num_offline_samples > 0:
+        raise NotImplementedError
+    else:
+        offline_data = None
+
 
     if regression_model == 'probabilistic_ensemble':
         model = BNNStatisticalModel(
@@ -146,40 +162,6 @@ def experiment(project_name: str = 'CT_Pendulum',
 
     discount_factor = 0.99
 
-    num_envs = 128
-    num_env_steps_between_updates = 20
-    sac_kwargs = {
-        'num_timesteps': sac_steps,
-        'episode_length': sac_horizon,
-        'num_env_steps_between_updates': num_env_steps_between_updates,
-        'num_envs': num_envs,
-        'num_eval_envs': 4,
-        'lr_alpha': 3e-4,
-        'lr_policy': 3e-4,
-        'lr_q': 3e-4,
-        'wd_alpha': 0.,
-        'wd_policy': 0.,
-        'wd_q': 0.,
-        'max_grad_norm': 1e5,
-        'discounting': 0.99,
-        'batch_size': 64,
-        'num_evals': 20,
-        'normalize_observations': True,
-        'reward_scaling': 1.,
-        'tau': 0.005,
-        'min_replay_size': 10 ** 4,
-        'max_replay_size': sac_steps,
-        'grad_updates_per_step': num_envs * num_env_steps_between_updates,
-        'deterministic_eval': True,
-        'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (64,) * 3,
-        'policy_activation': swish,
-        'critic_hidden_layer_sizes': (64,) * 3,
-        'critic_activation': swish,
-        'wandb_logging': log_wandb,
-        'return_best_model': True,
-    }
-
     max_replay_size_true_data_buffer = 10 ** 4
 
     extra_fields = ('derivative', 't', 'dt')
@@ -194,14 +176,15 @@ def experiment(project_name: str = 'CT_Pendulum',
                               next_observation=jnp.ones(env.observation_size),
                               extras={'state_extras': state_extras})
 
-    sac_buffer = UniformSamplingQueue(
-        max_replay_size=max_replay_size_true_data_buffer,
-        dummy_data_sample=dummy_sample,
-        sample_batch_size=1)
-
-    optimizer = SACOptimizer(system=None,
-                             true_buffer=sac_buffer,
-                             **sac_kwargs)
+    opt_params = iCemParams(
+        num_steps=icem_num_steps,
+        exponent=icem_colored_noise_exponent,
+        )
+    
+    optimizer = iCEMOptimizer(horizon=optimizer_horizon,
+                              key = jr.PRNGKey(seed),
+                              opt_params=opt_params,
+                              )
     if log_wandb:
         wandb.init(project=project_name,
                    dir='/cluster/scratch/' + ENTITY,
@@ -213,7 +196,7 @@ def experiment(project_name: str = 'CT_Pendulum',
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
 
-    class PendulumReward(Reward):
+    class DMPendulumReward(Reward):
         def __init__(self):
             super().__init__(x_dim=3, u_dim=1)
 
@@ -237,13 +220,20 @@ def experiment(project_name: str = 'CT_Pendulum',
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': env.dt}
 
+    if reward_source == 'dm-control':
+        reward_model = DMPendulumReward()
+    elif reward_source == 'gym':
+        reward_model = NotImplementedError(f'Unknown reward source {reward_source}') # GymPendulumReward()
+    else:   
+        raise NotImplementedError(f'Unknown reward source {reward_source}')
+
     agent = agent_class(
         env=env,
-        eval_env=env,
+        eval_env=eval_env,
         statistical_model=model,
         optimizer=optimizer,
-        episode_length=horizon,
-        reward_model=PendulumReward(),
+        episode_length=num_online_samples,
+        reward_model=reward_model,
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
@@ -268,11 +258,15 @@ def experiment(project_name: str = 'CT_Pendulum',
 def main(args):
     experiment(project_name=args.project_name,
                num_offline_samples=args.num_offline_samples,
-               sac_horizon=args.sac_horizon,
+               optimizer_horizon=args.optimizer_horizon,
+               num_online_samples=args.num_online_samples,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               noise_level=args.noise_level,
+               icem_num_steps=args.icem_num_steps,
+               icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+               reward_source=args.reward_source,
                seed=args.seed,
                num_episodes=args.num_episodes,
-               sac_steps=args.sac_steps,
                bnn_steps=args.bnn_steps,
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
@@ -286,13 +280,17 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--project_name', type=str, default='CT_Pendulum')
-    parser.add_argument('--num_offline_samples', type=int, default=200)
-    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--project_name', type=str, default='ICEM_CT_Pendulum')
+    parser.add_argument('--num_offline_samples', type=int, default=0)
+    parser.add_argument('--optimizer_horizon', type=int, default=100)
+    parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
+    parser.add_argument('--icem_num_steps', type=int, default=10)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+    parser.add_argument('--reward_source', type=str, default='dm-control')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
-    parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='pets')
@@ -300,7 +298,6 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='deterministic_FSVGD')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
-
 
     args = parser.parse_args()
     main(args)
