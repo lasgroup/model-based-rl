@@ -22,6 +22,8 @@ from mbpo.utils.type_aliases import OptimizerState
 from mbrl.model_based_agent.optimizer_wrapper import Actor
 from mbrl.utils.brax_utils import EnvInteractor
 
+from datetime import datetime
+
 
 @chex.dataclass
 class ModelBasedAgentState:
@@ -212,7 +214,8 @@ class BaseModelBasedAgent(ABC):
                                                                         samples=transitions)
         optimizer_state = optimizer_state.replace(true_buffer_state=collected_data_buffer_state)
         env_steps = agent_state.env_steps + self.num_envs * self.episode_length
-        return ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent), transitions
+        new_agent_state = ModelBasedAgentState(optimizer_state=optimizer_state, env_steps=env_steps, key=key_agent)
+        return new_agent_state, transitions # TODO: Remove new_agent_state (Debugging)
 
     def do_episode(self,
                    agent_state: ModelBasedAgentState,
@@ -230,8 +233,10 @@ class BaseModelBasedAgent(ABC):
                                                 episode_idx=episode_idx)
                 print(f'End of policy training')
         # We collect new data with the current policy
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start with data collection") # TODO: Remove line (Debugging)
         print(f'Start of data collection')
         agent_state, trajectory_transitions = self.simulate_on_true_env(agent_state=agent_state)
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Finished simulating on true env") # TODO: Remove line (Debugging)
         if self.save_trajectory_transitions and self.log_to_wandb:
             directory = os.path.join(wandb.run.dir, 'results')
             if not os.path.exists(directory):
@@ -240,9 +245,10 @@ class BaseModelBasedAgent(ABC):
             with open(model_path, 'wb') as handle:
                 pickle.dump(trajectory_transitions, handle)
             wandb.save(model_path, wandb.run.dir)
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of data collection") # TODO: Remove line (Debugging)
         print(f'End of data collection')
         print(f'Start with evaluation of the policy')
-        metrics = self.env_interactor.run_evaluation(actor=self.actor,
+        metrics, data = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
         if self.log_to_wandb:
             wandb.log(metrics | {'episode_idx': episode_idx})

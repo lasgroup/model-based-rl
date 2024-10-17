@@ -67,9 +67,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   weight_decay=weight_decay
                   )
 
-    env = ContinuousPendulumEnv(reward_source=reward_source,
-                                noise_level=jnp.array(noise_level),
-                                init_noise_key=jr.PRNGKey(12))
+    env = ContinuousPendulumEnv(reward_source=reward_source) #,
+                                # noise_level=jnp.array(noise_level),
+                                # init_noise_key=jr.PRNGKey(12)) TODO: Noise level
     
     eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
