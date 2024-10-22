@@ -2,8 +2,8 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['iCEM_CT_PendulumGeneral_Oct22_14_30_sleek'],
-    'num_offline_samples': [0, 200],
+    'project_name': ['iCEM_CT_PendulumGeneral_Oct22_14_45_logcompiles'],
+    'num_offline_samples': [0],
     'optimizer_horizon': [20],
     'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
