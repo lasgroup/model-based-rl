@@ -2,13 +2,13 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['iCEM_CT_PendulumGeneral_Oct16_23_30'],
+    'project_name': ['iCEM_CT_PendulumGeneral_Oct22_14_30_sleek'],
     'num_offline_samples': [0, 200],
-    'optimizer_horizon': [100],
+    'optimizer_horizon': [20],
     'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
     'icem_num_steps': [10],
-    'icem_colored_noise_exponent': [3.0],
+    'icem_colored_noise_exponent': [1.0],
     'reward_source': ['dm-control'],
     'seed': [5],
     'num_episodes': [20],
@@ -34,7 +34,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='3:59:00',
+                          duration='23:59:00',
                           prompt=True,
                           mem=16000)
 
