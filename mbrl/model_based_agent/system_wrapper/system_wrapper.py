@@ -452,8 +452,9 @@ class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std * self.sample_with_eps_std
-            # TODO: see if epistemic uncertainty should be normalized
-            int_reward = jnp.linalg.norm(model_output.epistemic_std)
+            # Use normalized (scale-invariant) disagreement
+            int_reward = jnp.linalg.norm(model_output.epistemic_std /
+                                         dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
             delta_x_dist = Normal(loc=model_output.mean, scale=scale_std)
             delta_x = delta_x_dist.sample(seed=key_sample_x_next)
             x_next = x + delta_x
@@ -461,7 +462,9 @@ class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std * self.sample_with_eps_std
-            int_reward = jnp.linalg.norm(model_output.epistemic_std)
+            # Use normalized (scale-invariant) disagreement
+            int_reward = jnp.linalg.norm(model_output.epistemic_std /
+                                         dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
             x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
             x_next = x_next_dist.sample(seed=key_sample_x_next)
 
