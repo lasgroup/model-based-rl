@@ -10,7 +10,7 @@ general_configs = {
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
     'reward_source': ['dm-control'],
-    'seed': [5],
+    'seed': list(range(5)),
     'num_episodes': [20],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],

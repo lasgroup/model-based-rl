@@ -41,7 +41,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
 
     log_wandb = True
-    jax.config.update('jax_log_compiles', True)
+    # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
     assert exploration in ['optimistic',
