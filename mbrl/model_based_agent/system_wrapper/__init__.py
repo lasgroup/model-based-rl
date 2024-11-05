@@ -7,7 +7,10 @@ from mbrl.model_based_agent.system_wrapper.system_wrapper import MeanDynamics, M
 
 from mbrl.model_based_agent.system_wrapper.system_wrapper import OptimisticExplorationSystem, \
     OptimisticExplorationDynamics, ExplorationReward, ExplorationSystem, ExplorationDynamics
+
 from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousPetsSystem, ContinuousPetsDynamics
 from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousOptimisticSystem, ContinuousOptimisticDynamics
 from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousMeanDynamics, ContinuousMeanSystem
 
+from mbrl.model_based_agent.system_wrapper.system_wrapper_ct import ContinuousOptimisticExplorationSystem, \
+    ContinuousOptimisticExplorationDynamics, ContinuousExplorationReward, ContinuousExplorationSystem, ContinuousExplorationDynamics

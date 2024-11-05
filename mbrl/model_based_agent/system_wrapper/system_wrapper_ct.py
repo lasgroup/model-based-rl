@@ -142,12 +142,11 @@ class ContinuousMeanDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
 
-class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
+class ContinuousExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
     def __init__(self, use_log: bool = True, scale_with_aleatoric_std: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_log = use_log
         self.scale_with_aleatoric_std = scale_with_aleatoric_std
-        raise NotImplementedError
 
     def get_intrinsic_reward(self, epistemic_std: chex.Array, aleatoric_std: chex.Array) -> chex.Array:
         if self.scale_with_aleatoric_std:
@@ -171,6 +170,7 @@ class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         if self.predict_difference:
+            raise NotImplementedError
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std
@@ -181,16 +181,18 @@ class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
             model_output = self.statistical_model(input=z,
                                                   statistical_model_state=dynamics_params.statistical_model_state)
             scale_std = model_output.epistemic_std
-            x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
-            x_next = x_next_dist.sample(seed=key_sample_x_next)
+            dx_dist = Normal(loc=model_output.mean, scale=scale_std)
+            dx_next = dx_dist.sample(seed=key_sample_x_next)
+            x_next = x + dx_next * self.dt
 
-        aleatoric_std = model_output.aleatoric_std
+        aleatoric_std = model_output.aleatoric_std # TODO * self.dt?
         intrinsic_reward = self.get_intrinsic_reward(scale_std, aleatoric_std)
         intrinsic_reward = jnp.atleast_1d(intrinsic_reward)
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
+        aleatoric_std = model_output.aleatoric_std * self.dt # TODO
         if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
         # add intrinsic reward to the next state
@@ -199,11 +201,10 @@ class ExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
 
 
-class OptimisticExplorationDynamics(ExplorationDynamics, Generic[ModelState]):
+class ContinuousOptimisticExplorationDynamics(ContinuousExplorationDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u_dim = self.x_dim + self.u_dim
-        raise NotImplementedError
     
     def next_state(self,
                    x: chex.Array,
@@ -214,27 +215,27 @@ class OptimisticExplorationDynamics(ExplorationDynamics, Generic[ModelState]):
         a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
         z = jnp.concatenate([x, a])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
         if self.predict_difference:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            delta_x = model_output.mean + \
-                      dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            raise NotImplementedError
+            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
             x_next = x + delta_x
         else:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
-        aleatoric_std = model_output.aleatoric_std
+        aleatoric_std = model_output.aleatoric_std # TODO: dt?
         intrinsic_reward = self.get_intrinsic_reward(model_output.epistemic_std, aleatoric_std)
         intrinsic_reward = jnp.atleast_1d(intrinsic_reward)
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
-        # add intrinsic reward to the next state
-        x_next_with_reward = jnp.concatenate([x_next, intrinsic_reward], axis=-1)
+        aleatoric_std = model_output.aleatoric_std * self.dt # TODO
         if not self.aleatoric_noise_in_prediction:
             aleatoric_std = 0 * aleatoric_std
+        # add intrinsic reward to the next state
+        x_next_with_reward = jnp.concatenate([x_next, intrinsic_reward], axis=-1)
         aleatoric_std_with_reward = jnp.concatenate([aleatoric_std, jnp.zeros_like(intrinsic_reward)], axis=-1)
         return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
 
@@ -324,10 +325,10 @@ class ContinuousMeanSystem(ContinuousPetsSystem, Generic[ModelState, RewardParam
 
 @chex.dataclass
 class ExplorationRewardParams:
-    action_cost: chex.Array | float = 0.0
+    action_cost: chex.Array | float = 0.0 # TODO: increase
 
 
-class ExplorationReward(Reward, ExplorationRewardParams):
+class ContinuousExplorationReward(Reward, ExplorationRewardParams):
     def __init__(self, x_dim: int, u_dim: int):
         super().__init__(x_dim=x_dim, u_dim=u_dim)
 
@@ -348,10 +349,11 @@ class ExplorationReward(Reward, ExplorationRewardParams):
         return ExplorationRewardParams()
 
 
-class ExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: ExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
+class ContinuousExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: ContinuousExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
         if reward is None:
-            reward = ExplorationReward(x_dim=dynamics.x_dim, u_dim=dynamics.u_dim)
+            # TODO: evtl pass control cost here. Currently zero.
+            reward = ContinuousExplorationReward(x_dim=dynamics.x_dim, u_dim=dynamics.u_dim)
         super().__init__(dynamics, reward)
 
     def get_reward(self,
@@ -362,7 +364,7 @@ class ExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams])
                    key: jax.random.PRNGKey):
         # x_next includes the next state and the intrinsic reward
         chex.assert_shape(x_next, (self.x_dim + 1,))
-        if isinstance(self.reward, ExplorationReward):
+        if isinstance(self.reward, ContinuousExplorationReward):
             # include the intrinsic reward in x_next
             reward_dist, new_reward_params = self.reward(x, u, reward_params, x_next)
         else:
@@ -391,7 +393,7 @@ class ExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams])
         return new_system_state
 
 
-class OptimisticExplorationSystem(ExplorationSystem, Generic[ModelState, RewardParams]):
+class ContinuousOptimisticExplorationSystem(ContinuousExplorationSystem, Generic[ModelState, RewardParams]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -403,7 +405,7 @@ class OptimisticExplorationSystem(ExplorationSystem, Generic[ModelState, RewardP
                    key: jax.random.PRNGKey):
         # x_next includes the next state and the intrinsic reward
         chex.assert_shape(x_next, (self.x_dim + 1,))
-        if isinstance(self.reward, ExplorationReward):
+        if isinstance(self.reward, ContinuousExplorationReward):
             # include the intrinsic reward in x_next
             # exclude etas from the reward calculation
             reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], reward_params, x_next)
