@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['iCEM_CT_PendulumGeneral_Nov04_14_00_IncreasedActionCost'],
+    'project_name': ['iCEM_CT_PendulumGeneral_Nov05_13_30_VaryingActionCost'],
     'num_offline_samples': [0],
     'optimizer_horizon': [20],
     'num_online_samples': [200],
@@ -10,13 +10,14 @@ general_configs = {
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
     'reward_source': ['dm-control'],
-    'seed': list(range(5)),
+    'control_cost': [0.0, 0.02, 0.05, 0.1, 0.2],
+    'seed': list(range(3)),
     'num_episodes': [20],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['pets','optimistic'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble', 'deterministic_ensemble'],
+    'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
 }

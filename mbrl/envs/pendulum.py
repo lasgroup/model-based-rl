@@ -22,7 +22,7 @@ class PendulumDynamicsParams:
 
 @chex.dataclass
 class PendulumRewardParams:
-    control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.2))
+    control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.02))
     angle_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
     target_angle: chex.Array = struct.field(default_factory=lambda: jnp.array(0.0))
 

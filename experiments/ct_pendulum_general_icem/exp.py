@@ -11,6 +11,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                icem_num_steps: int = 10,
                icem_colored_noise_exponent: float = 3.0,
                reward_source = 'dm-control',
+               control_cost: float = 0.02,
                seed: int = 42,
                num_episodes: int = 20,
                bnn_steps: int = 5_000,
@@ -59,6 +60,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   icem_num_steps=icem_num_steps,
                   icem_colored_noise_exponent=icem_colored_noise_exponent,
                   reward_source=reward_source,
+                  control_cost=control_cost,
                   bnn_steps=bnn_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
@@ -73,6 +75,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                                 # init_noise_key=jr.PRNGKey(12)) TODO: Noise level
     
     eval_env = ContinuousPendulumEnv(reward_source=reward_source)
+    # adjust control cost
+    control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
+    env.reward_params = control_cost_params
+    eval_env.reward_params = control_cost_params
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -266,6 +272,7 @@ def main(args):
                icem_num_steps=args.icem_num_steps,
                icem_colored_noise_exponent=args.icem_colored_noise_exponent,
                reward_source=args.reward_source,
+               control_cost=args.control_cost,
                seed=args.seed,
                num_episodes=args.num_episodes,
                bnn_steps=args.bnn_steps,
@@ -290,6 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
     parser.add_argument('--reward_source', type=str, default='dm-control')
+    parser.add_argument('--control_cost', type=float, default=0.02)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
