@@ -46,6 +46,10 @@ class Actor(ABC):
              true_buffer_state: ReplayBufferState | None = None) -> OptimizerState:
         return self.optimizer.init(key, true_buffer_state)
 
+    @property
+    def can_act_in_batches(self):
+        return self.optimizer.can_act_in_batches
+
     def dummy_true_buffer_state(self,
                                 key: chex.Array) -> ReplayBufferState:
         return self.optimizer.dummy_true_buffer_state(key)
