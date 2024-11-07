@@ -35,8 +35,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
     from distrax import Normal
     from jax.nn import swish
-    from mbrl.utils.icem_brax_wrapper import iCEMOptimizer
-    from mbrl.utils.icem import iCemParams
+    from mbpo.optimizers import iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent
