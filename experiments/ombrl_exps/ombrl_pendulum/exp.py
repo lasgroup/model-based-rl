@@ -141,6 +141,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             delta=0.1,
             num_training_steps=1000,
             logging_frequency=100,
+            beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
         )
     else:
         raise NotImplementedError
@@ -245,7 +246,6 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--max_time_factor', type=int, default=30)
     parser.add_argument('--exploration_factor', type=float, default=2.0)
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--log_wandb', type=int, default=0)
