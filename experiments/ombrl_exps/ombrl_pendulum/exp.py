@@ -40,8 +40,11 @@ def experiment(project_name: str = 'GPUSpeedTest',
                int_reward_weight: float = 1.0,
                ):
     assert exploration in ['optimistic', 'pets',
-                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+                           'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    if regression_model == 'GP':
+        import jax
+        jax.config.update("jax_enable_x64", True)
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
                                                 transition_steps=linear_scheduler_steps)
@@ -248,10 +251,10 @@ if __name__ == '__main__':
     parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='FSVGD')
+    parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--exploration_factor', type=float, default=2.0)
     parser.add_argument('--horizon', type=int, default=100)
-    parser.add_argument('--log_wandb', type=int, default=0)
+    parser.add_argument('--log_wandb', type=int, default=1)
     parser.add_argument('--entity', type=str, default='trevenl')
     parser.add_argument('--int_reward_weight', type=float, default=1.0)
 

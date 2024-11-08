@@ -20,9 +20,10 @@ general_configs = {
     'linear_scheduler_steps': [20_000],
     'exploration': ['optimistic', 'pets', 'hucrl'],
     'reset_statistical_model': [1],
-    'regression_model': ['FSVGD', 'probabilistic_ensemble'],
+    'regression_model': ['GP', ],
+    # 'regression_model': ['FSVGD', 'probabilistic_ensemble'],
     'exploration_factor': [20, ],
-    'horizon': [200],
+    'horizon': [100],
     'log_wandb': [1],
     'entity': [ENTITY, ],
     'int_reward_weight': [0.1, 1.0]
