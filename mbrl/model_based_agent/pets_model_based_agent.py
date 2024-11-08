@@ -1,4 +1,4 @@
-from .base_model_based_agent import BaseModelBasedAgent
+from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, PetsActor
 from mbrl.model_based_agent.system_wrapper import PetsSystem, PetsDynamics
@@ -144,7 +144,6 @@ if __name__ == "__main__":
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
-        learning_style='Optimistic',
         reward_model=PendulumReward(),
         episode_length=horizon,
         offline_data=offline_data,

@@ -1,27 +1,51 @@
-from .base_model_based_agent import BaseModelBasedAgent
+from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
-from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor
-from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics
+from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor
+from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics, OMBRLDynamics, OMBRLSystem
 
 
 class OptimisticModelBasedAgent(BaseModelBasedAgent):
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 use_hallucinated_controls: bool = True,
+                 int_reward_weight: float = 1.0,
+                 *args, **kwargs):
+        self.use_hallucinated_controls = use_hallucinated_controls
+        self.int_reward_weight = int_reward_weight
+        import warnings
+        warnings.warn(
+            f'intrinsic reward weight is ignored when use hallucination controls is true.'
+        )
         super().__init__(*args, **kwargs)
 
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = OptimisticDynamics, OptimisticSystem, OptimisticActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
-                            x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size,
-                            predict_difference = self.predict_difference)
-        system = system(dynamics=dynamics,
-                        reward=self.reward_model, )
-        actor = actor(env_observation_size=self.env.observation_size,
-                      env_action_size=self.env.action_size,
-                      optimizer=optimizer)
-        actor.set_system(system=system)
+        if self.use_hallucinated_controls:
+            dynamics, system, actor = OptimisticDynamics, OptimisticSystem, OptimisticActor
+            dynamics = dynamics(statistical_model=self.statistical_model,
+                                x_dim=self.env.observation_size,
+                                u_dim=self.env.action_size,
+                                predict_difference=self.predict_difference)
+            system = system(dynamics=dynamics,
+                            reward=self.reward_model, )
+            actor = actor(env_observation_size=self.env.observation_size,
+                          env_action_size=self.env.action_size,
+                          optimizer=optimizer)
+            actor.set_system(system=system)
+        else:
+            dynamics, system, actor = OMBRLDynamics, OMBRLSystem, PetsActor
+            dynamics = dynamics(statistical_model=self.statistical_model,
+                                x_dim=self.env.observation_size,
+                                u_dim=self.env.action_size,
+                                predict_difference=self.predict_difference)
+            system = system(dynamics=dynamics,
+                            reward=self.reward_model,
+                            int_reward_weight=self.int_reward_weight,
+                            )
+            actor = actor(env_observation_size=self.env.observation_size,
+                          env_action_size=self.env.action_size,
+                          optimizer=optimizer)
+            actor.set_system(system=system)
         return actor
 
 
@@ -85,7 +109,7 @@ if __name__ == "__main__":
         output_stds=1e-3 * jnp.ones(env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
-        logging_wandb=True,
+        logging_wandb=False,
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
@@ -120,7 +144,7 @@ if __name__ == "__main__":
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (64, 64),
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': False,
         'return_best_model': True,
     }
     max_replay_size_true_data_buffer = 10 ** 4
@@ -144,13 +168,13 @@ if __name__ == "__main__":
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
-        learning_style='Optimistic',
         reward_model=PendulumReward(),
         episode_length=horizon,
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
-        log_to_wandb=True,
+        log_to_wandb=False,
+        use_hallucinated_controls=False,
     )
 
     agent_state = agent.run_episodes(num_episodes=20,

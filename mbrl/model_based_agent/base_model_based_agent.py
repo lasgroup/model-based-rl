@@ -85,6 +85,9 @@ class BaseModelBasedAgent(ABC):
 
         self.collected_data_buffer = self.prepare_data_buffers()
         self.actor = self.prepare_actor(optimizer)
+        if not self.actor.can_act_in_batches:
+            assert self.num_envs == self.num_eval_envs == 1, "the selected optimizer " \
+                                                             "only works for 1 train and eval env"
 
     def prepare_data_buffers(self) -> UniformSamplingQueue:
         dummy_sample = Transition(observation=jnp.zeros(shape=(self.env.observation_size,)),
