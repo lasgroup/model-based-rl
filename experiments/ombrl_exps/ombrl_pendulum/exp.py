@@ -36,7 +36,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                exploration_factor: float = 1.0,
                horizon: int = 100,
                log_wandb: bool = False,
-               entity: str = 'trevenl'
+               entity: str = 'trevenl',
+               int_reward_weight: float = 1.0,
                ):
     assert exploration in ['optimistic', 'pets',
                            'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -62,6 +63,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   horizon=horizon,
                   init_std=init_std,
                   exponent=exponent,
+                  int_reward_weight=int_reward_weight
                   )
 
     env = PendulumEnv(reward_source='dm-control')
@@ -169,7 +171,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
     if exploration == 'optimistic':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': False,
-                                  'int_reward_weight': 1.0}
+                                  'int_reward_weight': int_reward_weight}
     elif exploration == 'hucrl':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': True}
@@ -223,6 +225,7 @@ def main(args):
                horizon=args.horizon,
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
+               int_reward_weight=args.int_reward_weight,
                )
 
 
@@ -250,6 +253,7 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--log_wandb', type=int, default=0)
     parser.add_argument('--entity', type=str, default='trevenl')
+    parser.add_argument('--int_reward_weight', type=float, default=1.0)
 
     args = parser.parse_args()
     main(args)

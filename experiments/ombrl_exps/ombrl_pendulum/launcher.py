@@ -18,13 +18,14 @@ general_configs = {
     'min_bnn_steps': [5_000],
     'max_bnn_steps': [50_000],
     'linear_scheduler_steps': [20_000],
-    'exploration': ['optimistic', 'pets', 'hucrl', 'probabilistic_ensemble'],
+    'exploration': ['optimistic', 'pets', 'hucrl'],
     'reset_statistical_model': [1],
-    'regression_model': ['FSVGD', ],
+    'regression_model': ['FSVGD', 'probabilistic_ensemble'],
     'exploration_factor': [20, ],
     'horizon': [200],
     'log_wandb': [1],
     'entity': [ENTITY, ],
+    'int_reward_weight': [0.1, 1.0]
 }
 
 
