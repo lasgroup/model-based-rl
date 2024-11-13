@@ -4,7 +4,7 @@ from experiments.util import generate_run_commands, generate_base_command, dict_
 ENTITY = 'trevenl'
 
 general_configs = {
-    'project_name': ['OMBRL_Pendulum_Nov11'],
+    'project_name': ['OMBRL_Pendulum_Nov13'],
     'num_offline_samples': [0, ],
     'icem_horizon': [20, ],
     'num_particles': [10, ],
@@ -19,14 +19,14 @@ general_configs = {
     'max_bnn_steps': [50_000],
     'linear_scheduler_steps': [20_000],
     'exploration': ['optimistic', 'pets', 'hucrl'],
-    'reset_statistical_model': [0],
-    # 'regression_model': ['GP', ],
-    'regression_model': ['FSVGD', 'probabilistic_ensemble'],
+    'reset_statistical_model': [0, 1],
+    'regression_model': ['FSVGD'],
     'exploration_factor': [1.0, 2.0],
+    'deterministic_policy_for_data_collection': [0, 1],
     'horizon': [200],
     'log_wandb': [1],
     'entity': [ENTITY, ],
-    'int_reward_weight': [0.1, 1.0]
+    'int_reward_weight': [1.0, 2.0, 5.0]
 }
 
 

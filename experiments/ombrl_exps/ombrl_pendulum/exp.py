@@ -38,6 +38,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                log_wandb: bool = False,
                entity: str = 'trevenl',
                int_reward_weight: float = 1.0,
+               deterministic_policy_for_data_collection: bool = True
                ):
     assert exploration in ['optimistic', 'pets',
                            'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -66,7 +67,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   horizon=horizon,
                   init_std=init_std,
                   exponent=exponent,
-                  int_reward_weight=int_reward_weight
+                  int_reward_weight=int_reward_weight,
+                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
                   )
 
     env = PendulumEnv(reward_source='dm-control')
@@ -109,7 +111,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(128, 128),
+            features=(64, 64),
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
@@ -126,16 +128,15 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(128, 128),
+            features=(64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
             logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=256,
             eval_frequency=10,
-            weight_decay=0.0,
+            weight_decay=0.1,
             logging_frequency=100,
-
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
@@ -196,6 +197,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         num_eval_envs=1,
         log_to_wandb=log_wandb,
         reset_statistical_model=reset_statistical_model,
+        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         **additional_agent_kwarg
     )
 
@@ -229,6 +231,7 @@ def main(args):
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
                int_reward_weight=args.int_reward_weight,
+               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection)
                )
 
 
@@ -245,6 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--exponent', type=float, default=1.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=50)
+    parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
 
     parser.add_argument('--min_bnn_steps', type=int, default=5_000)
     parser.add_argument('--max_bnn_steps', type=int, default=50_000)
