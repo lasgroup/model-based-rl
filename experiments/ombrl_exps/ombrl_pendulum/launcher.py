@@ -4,7 +4,7 @@ from experiments.util import generate_run_commands, generate_base_command, dict_
 ENTITY = 'kiten'
 
 general_configs = {
-    'project_name': ['OMBRL_Pendulum_Nov14'],
+    'project_name': ['OMBRL_Pendulum_Nov15'],
     'num_offline_samples': [0, ],
     'icem_horizon': [20, ],
     'num_particles': [10, ],
