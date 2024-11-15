@@ -1,21 +1,5 @@
 import argparse
 
-import chex
-import jax.numpy as jnp
-import jax.random as jr
-import optax
-import wandb
-from distrax import Normal
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-from mbpo.optimizers import iCEMOptimizer, iCemParams
-from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
-from mbrl.envs.pendulum import PendulumEnv
-
-from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
-
-
 def experiment(project_name: str = 'GPUSpeedTest',
                seed: int = 42,
                num_offline_samples: int = 0,
@@ -45,6 +29,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
     if regression_model == 'GP':
         import jax
         jax.config.update("jax_enable_x64", True)
+
+    import chex
+    import jax.numpy as jnp
+    import jax.random as jr
+    import optax
+    import wandb
+    from distrax import Normal
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+    from mbpo.optimizers import iCEMOptimizer, iCemParams
+    from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
+    from mbrl.envs.pendulum import PendulumEnv
+
+    from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
                                                 transition_steps=linear_scheduler_steps)
@@ -109,7 +108,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256, ) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
@@ -126,7 +125,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256, ) * 2,
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
             logging_wandb=log_wandb,
