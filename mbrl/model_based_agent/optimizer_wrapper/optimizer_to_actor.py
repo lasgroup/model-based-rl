@@ -54,6 +54,10 @@ class Actor(ABC):
                                 key: chex.Array) -> ReplayBufferState:
         return self.optimizer.dummy_true_buffer_state(key)
 
+    @property
+    def system(self):
+        return self.optimizer.system
+
 
 class PetsActor(Actor):
     def __init__(self, *args, **kwargs):

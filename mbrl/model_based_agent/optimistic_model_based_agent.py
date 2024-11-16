@@ -1,16 +1,22 @@
-from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent
+from mbrl.model_based_agent.base_model_based_agent import BaseModelBasedAgent, ModelBasedAgentState
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor
 from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics, OMBRLDynamics, OMBRLSystem
+from typing import Union
+import optax
+import wandb
 
 
 class OptimisticModelBasedAgent(BaseModelBasedAgent):
     def __init__(self,
                  use_hallucinated_controls: bool = True,
-                 int_reward_weight: float = 1.0,
+                 int_reward_weight: Union[float, optax.Schedule] = 1.0,
                  *args, **kwargs):
         self.use_hallucinated_controls = use_hallucinated_controls
-        self.int_reward_weight = int_reward_weight
+        if isinstance(int_reward_weight, float):
+            self.num_training_steps = optax.constant_schedule(int_reward_weight)
+        else:
+            self.int_reward_weight = int_reward_weight
         import warnings
         warnings.warn(
             f'intrinsic reward weight is ignored when use hallucination controls is true.'
@@ -40,13 +46,30 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
                                 predict_difference=self.predict_difference)
             system = system(dynamics=dynamics,
                             reward=self.reward_model,
-                            int_reward_weight=self.int_reward_weight,
+                            int_reward_weight=self.int_reward_weight(0),
                             )
             actor = actor(env_observation_size=self.env.observation_size,
                           env_action_size=self.env.action_size,
                           optimizer=optimizer)
             actor.set_system(system=system)
         return actor
+
+    def train_policy(self,
+                     agent_state: ModelBasedAgentState,
+                     episode_idx: int) -> ModelBasedAgentState:
+        new_agent_state = super().train_policy(agent_state, episode_idx)
+        if isinstance(self.actor.system, OMBRLSystem):
+            int_reward_weight = self.int_reward_weight(episode_idx)
+            new_system_params = new_agent_state.optimizer_state.system_params.replace(
+                int_reward_weight=int_reward_weight)
+            new_optimizer_state = new_agent_state.optimizer_state.replace(system_params=new_system_params)
+            new_agent_state = new_agent_state.replace(optimizer_state=new_optimizer_state)
+
+            if self.log_to_wandb:
+                wandb.log({'int_reward_weight': new_agent_state.optimizer_state.system_params.int_reward_weight})
+            else:
+                print(f'int_reward_weight {int_reward_weight}')
+        return new_agent_state
 
 
 if __name__ == "__main__":
