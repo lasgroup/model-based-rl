@@ -36,7 +36,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                ):
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
-    assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'FSVGD', 'GP']
 
     config = dict(num_offline_samples=num_offline_samples,
                   sac_horizon=sac_horizon,
@@ -68,11 +68,26 @@ def experiment(project_name: str = 'GPUSpeedTest',
             features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
-            eval_frequency=500,
+            eval_frequency=5_000,
+            weight_decay=0.0,
+        )
+    elif regression_model == 'deterministic_ensemble':
+        model = BNNStatisticalModel(
+            input_dim=env.observation_size + env.action_size,
+            output_dim=env.observation_size,
+            num_training_steps=bnn_steps,
+            output_stds=1e-3 * jnp.ones(env.observation_size),
+            features=(256,) * 2,
+            num_particles=10,
+            logging_wandb=log_wandb,
+            return_best_model=True,
+            eval_batch_size=64,
+            train_share=0.8,
+            eval_frequency=5_000,
             weight_decay=0.0,
         )
     elif regression_model == 'FSVGD':
@@ -85,11 +100,11 @@ def experiment(project_name: str = 'GPUSpeedTest',
             features=(64, 64, 64),
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=10,
-            logging_wandb=False,
+            logging_wandb=log_wandb,
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
-            eval_frequency=500,
+            eval_frequency=5_000,
             weight_decay=0.0,
         )
     elif regression_model == 'GP':
@@ -104,13 +119,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     discount_factor = 0.99
 
-    num_envs = 64
+    num_envs = 128
     num_env_steps_between_updates = 20
     sac_kwargs = {
         'num_timesteps': sac_steps,
         'episode_length': sac_horizon,
-        'num_env_steps_between_updates': 20,
-        'num_envs': 64,
+        'num_env_steps_between_updates': num_env_steps_between_updates,
+        'num_envs': num_envs,
         'num_eval_envs': 4,
         'lr_alpha': 3e-4,
         'lr_policy': 3e-4,
@@ -120,21 +135,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
         'wd_q': 0.,
         'max_grad_norm': 1e5,
         'discounting': 0.99,
-        'batch_size': 32,
+        'batch_size': 64,
         'num_evals': 20,
         'normalize_observations': True,
         'reward_scaling': 1.,
         'tau': 0.005,
         'min_replay_size': 10 ** 4,
-        'max_replay_size': 10 ** 5,
-        'grad_updates_per_step': num_envs * num_env_steps_between_updates // 2,
+        'max_replay_size': sac_steps,
+        'grad_updates_per_step': num_envs * num_env_steps_between_updates,
         'deterministic_eval': True,
         'init_log_alpha': 0.,
-        'policy_hidden_layer_sizes': (32,) * 5,
+        'policy_hidden_layer_sizes': (64,) * 3,
         'policy_activation': swish,
-        'critic_hidden_layer_sizes': (128,) * 4,
+        'critic_hidden_layer_sizes': (64,) * 3,
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': log_wandb,
         'return_best_model': True,
     }
 
