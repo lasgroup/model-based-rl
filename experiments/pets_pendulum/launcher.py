@@ -1,14 +1,16 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations, available_gpus
 
-PROJECT_NAME = 'Model_based_pets_March13_10_20'
+PROJECT_NAME = 'StandardPetsNov15-v2'
 
 general_configs = {
     'project_name': [PROJECT_NAME],
-    'num_offline_samples': [0, 10_000],
-    'sac_horizon': [100],
+    'num_offline_samples': [0, ],
     'deterministic_policy_for_data_collection': [1],
     'seed': list(range(5)),
+    'icem_horizon': [20, ],
+    'reset_statistical_model': [0],
+    'bnn_train_steps': [20_000, 50_000],
 }
 
 

@@ -38,7 +38,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                log_wandb: bool = False,
                entity: str = 'trevenl',
                int_reward_weight: float = 1.0,
-               deterministic_policy_for_data_collection: bool = True
+               deterministic_policy_for_data_collection: bool = True,
+               bnn_weight_decay: float = 1e-4
                ):
     assert exploration in ['optimistic', 'pets',
                            'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -68,7 +69,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   init_std=init_std,
                   exponent=exponent,
                   int_reward_weight=int_reward_weight,
-                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection
+                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                  bnn_weight_decay=bnn_weight_decay
                   )
 
     env = PendulumEnv(reward_source='dm-control')
@@ -118,7 +120,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return_best_model=True,
             eval_batch_size=256,
             eval_frequency=500,
-            weight_decay=0.1,
+            weight_decay=bnn_weight_decay,
             logging_frequency=100,
         )
     elif regression_model == 'FSVGD':
@@ -135,7 +137,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             return_best_model=True,
             eval_batch_size=256,
             eval_frequency=10,
-            weight_decay=0.1,
+            weight_decay=bnn_weight_decay,
             logging_frequency=100,
         )
     elif regression_model == 'GP':
@@ -231,7 +233,8 @@ def main(args):
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
                int_reward_weight=args.int_reward_weight,
-               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection)
+               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               bnn_weight_decay=args.bnn_weight_decay,
                )
 
 
@@ -261,6 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_wandb', type=int, default=1)
     parser.add_argument('--entity', type=str, default='trevenl')
     parser.add_argument('--int_reward_weight', type=float, default=1.0)
+    parser.add_argument('--bnn_weight_decay', type=float, default=1.0)
 
     args = parser.parse_args()
     main(args)
