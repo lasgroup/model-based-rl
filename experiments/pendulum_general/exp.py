@@ -1,23 +1,6 @@
 import argparse
 
-import chex
-import jax.numpy as jnp
-import jax.random as jr
-import wandb
-from brax.training.replay_buffers import UniformSamplingQueue
-from brax.training.types import Transition
-from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
-from distrax import Normal
-from jax.nn import swish
-from mbpo.optimizers import SACOptimizer
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
-from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
-
-log_wandb = False
+log_wandb = True
 ENTITY = 'kiten'
 
 
@@ -34,6 +17,25 @@ def experiment(project_name: str = 'GPUSpeedTest',
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble'
                ):
+    import chex
+    import jax
+    import jax.numpy as jnp
+    import jax.random as jr
+    import wandb
+    from brax.training.replay_buffers import UniformSamplingQueue
+    from brax.training.types import Transition
+    from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
+    from distrax import Normal
+    from jax.nn import swish
+    from mbpo.optimizers import SACOptimizer
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+
+    from mbrl.envs.pendulum import PendulumEnv
+    from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent
+    jax.config.update('jax_enable_x64', True)
+
     assert exploration in ['optimistic',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'FSVGD', 'GP']
