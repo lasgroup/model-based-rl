@@ -74,6 +74,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                                 # init_noise_key=jr.PRNGKey(12)) TODO: Noise level
     
     eval_env = ContinuousPendulumEnv(reward_source=reward_source)
+
+    # debugging. TODO: REMOVE!
+    print("Max speed is: ", env.max_speed)
+
     # adjust control cost
     control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
     env.reward_params = control_cost_params

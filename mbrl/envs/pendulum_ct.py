@@ -163,6 +163,10 @@ class ContinuousPendulumEnv(Env):
     @property
     def action_size(self) -> int:
         return 1
+        
+    @property
+    def max_speed(self) -> float:
+        return self.dynamics_params.max_speed
 
     def backend(self) -> str:
         return 'positional'
