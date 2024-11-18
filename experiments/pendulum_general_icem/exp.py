@@ -195,29 +195,36 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
 def main(args):
     experiment(project_name=args.project_name,
-               num_offline_samples=args.num_offline_samples,
-               sac_horizon=args.sac_horizon,
-               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
-               seed=args.seed,
-               num_episodes=args.num_episodes,
-               sac_steps=args.sac_steps,
-               bnn_steps=args.bnn_steps,
-               first_episode_for_policy_training=args.first_episode_for_policy_training,
-               exploration=args.exploration,
-               reset_statistical_model=bool(args.reset_statistical_model),
-               regression_model=args.regression_model
-               )
-
+        num_offline_samples=args.num_offline_samples,
+        optimizer_horizon=args.optimizer_horizon,
+        num_online_samples=args.num_online_samples,
+        deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+        noise_level=args.noise_level,
+        icem_num_steps=args.icem_num_steps,
+        icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+        reward_source=args.reward_source,
+        seed=args.seed,
+        num_episodes=args.num_episodes,
+        bnn_steps=args.bnn_steps,
+        first_episode_for_policy_training=args.first_episode_for_policy_training,
+        exploration=args.exploration,
+        reset_statistical_model=bool(args.reset_statistical_model),
+        regression_model=args.regression_model
+    )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
     parser.add_argument('--num_offline_samples', type=int, default=200)
-    parser.add_argument('--sac_horizon', type=int, default=100)
+    parser.add_argument('--optimizer_horizon', type=int, default=100)
+    parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--noise_level', nargs=2, type=float, default=[0.1, 0.1])
+    parser.add_argument('--icem_num_steps', type=int, default=10)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+    parser.add_argument('--reward_source', type=str, default='dm-control')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
-    parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=2)
     parser.add_argument('--exploration', type=str, default='pets')
