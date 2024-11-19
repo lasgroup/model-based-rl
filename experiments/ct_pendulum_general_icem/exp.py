@@ -75,9 +75,6 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     
     eval_env = ContinuousPendulumEnv(reward_source=reward_source)
 
-    # debugging. TODO: REMOVE!
-    print("Max speed is: ", env.max_speed)
-
     # adjust control cost
     control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
     env.reward_params = control_cost_params
@@ -200,6 +197,10 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                    dir='/cluster/scratch/' + ENTITY,
                    config=config)
 
+    
+    # debugging. TODO: REMOVE!
+    print("Max speed is: ", env.max_speed)
+    
     agent_class = None
     if exploration == 'optimistic':
         agent_class = ContinuousOptimisticModelBasedAgent
