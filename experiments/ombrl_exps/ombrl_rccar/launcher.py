@@ -14,7 +14,7 @@ general_configs = {
     'num_steps': [10, ],
     'exponent': [0.0],
     'seed': list(range(5)),
-    'num_episodes': [20, ],
+    'num_episodes': [40, ],
     'min_bnn_steps': [5_000],
     'max_bnn_steps': [50_000],
     'linear_scheduler_steps': [20_000],
@@ -25,7 +25,6 @@ general_configs = {
     'log_wandb': [1],
     'entity': [ENTITY, ],
     'calibration': [1],
-    'reward_source': ['dm-control'],
 }
 
 pets_config = {

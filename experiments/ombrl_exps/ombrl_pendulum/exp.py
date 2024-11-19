@@ -12,7 +12,7 @@ from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEns
 from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
 from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
 from mbrl.envs.pendulum import PendulumEnv
-
+from optax.schedules import linear_schedule
 from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
 
 
@@ -37,7 +37,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
                horizon: int = 100,
                log_wandb: bool = False,
                entity: str = 'trevenl',
-               int_reward_weight: float = 1.0,
+               int_rew_weight_init: float = 1.0,
+               int_rew_weight_end: float = 0.0,
+               rew_decrease_steps: int = 20,
+               calibration: bool = False,
+               reward_source: str = 'gym',
+               sample_with_eps_std: bool = False,
                ):
     assert exploration in ['optimistic', 'pets',
                            'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
@@ -48,6 +53,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
                                                 transition_steps=linear_scheduler_steps)
+
     config = dict(num_offline_samples=num_offline_samples,
                   icem_horizon=icem_horizon,
                   num_samples=num_samples,
@@ -66,14 +72,25 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   horizon=horizon,
                   init_std=init_std,
                   exponent=exponent,
-                  int_reward_weight=int_reward_weight
+                  int_rew_weight_init=int_rew_weight_init,
+                  int_rew_weight_end=int_rew_weight_end,
+                  rew_decrease_steps=rew_decrease_steps,
+                  calibration=calibration,
+                  sample_with_eps_std=sample_with_eps_std,
+                  reward_source=reward_source,
+                  env_name='pendulum',
                   )
 
-    env = PendulumEnv(reward_source='dm-control')
+    int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
+                                        end_value=int_rew_weight_end,
+                                        transition_steps=rew_decrease_steps)
+
+    env = PendulumEnv(reward_source=reward_source)
 
     class PendulumReward(Reward):
-        def __init__(self):
+        def __init__(self, reward_source: str = 'gym'):
             super().__init__(x_dim=3, u_dim=1)
+            self.reward_source = reward_source
 
         def __call__(self,
                      x: chex.Array,
@@ -86,8 +103,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
             target_angle = env.reward_params.target_angle
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-            reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                   0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
+            if self.reward_source == 'gym':
+                reward = -(env.reward_params.angle_cost * diff_th ** 2 +
+                           0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+            else:
+                reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
+                                                       0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
@@ -109,7 +130,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
@@ -118,6 +139,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             eval_frequency=500,
             weight_decay=0.0,
             logging_frequency=100,
+            calibration=calibration,
         )
     elif regression_model == 'FSVGD':
         model = BNNStatisticalModel(
@@ -126,7 +148,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256,) * 2,
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
             logging_wandb=log_wandb,
@@ -135,6 +157,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             eval_frequency=10,
             weight_decay=0.0,
             logging_frequency=100,
+            calibration=calibration,
 
         )
     elif regression_model == 'GP':
@@ -174,7 +197,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
     if exploration == 'optimistic':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': False,
-                                  'int_reward_weight': int_reward_weight}
+                                  'int_reward_weight': int_reward_weight,
+                                  'sample_with_eps_std': sample_with_eps_std,
+                                  }
     elif exploration == 'hucrl':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': True}
@@ -189,7 +214,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         eval_env=env,
         statistical_model=model,
         optimizer=optimizer,
-        reward_model=PendulumReward(),
+        reward_model=PendulumReward(reward_source=reward_source),
         episode_length=horizon,
         offline_data=offline_data,
         num_envs=1,
@@ -228,7 +253,12 @@ def main(args):
                horizon=args.horizon,
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
-               int_reward_weight=args.int_reward_weight,
+               int_rew_weight_init=args.int_rew_weight_init,
+               int_rew_weight_end=args.int_rew_weight_end,
+               rew_decrease_steps=args.rew_decrease_steps,
+               calibration=bool(args.calibration),
+               reward_source=args.reward_source,
+               sample_with_eps_std=bool(args.sample_with_eps_std),
                )
 
 
@@ -256,7 +286,12 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--log_wandb', type=int, default=1)
     parser.add_argument('--entity', type=str, default='trevenl')
-    parser.add_argument('--int_reward_weight', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_end', type=float, default=0.1)
+    parser.add_argument('--rew_decrease_steps', type=int, default=20)
+    parser.add_argument('--calibration', type=int, default=1)
+    parser.add_argument('--reward_source', type=str, default='gym')
+    parser.add_argument('--sample_with_eps_std', type=int, default=0)
 
     args = parser.parse_args()
     main(args)

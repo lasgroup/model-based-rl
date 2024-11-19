@@ -14,10 +14,8 @@ from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
 from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
 from wtc.envs.rccar import RCCar, decode_angles
 from wtc.utils.tolerance_reward import ToleranceReward
-
+from optax.schedules import linear_schedule
 from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
-
-
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -40,11 +38,19 @@ def experiment(project_name: str = 'GPUSpeedTest',
                exploration_factor: float = 1.0,
                horizon: int = 100,
                log_wandb: bool = False,
-               entity: str = 'trevenl'
+               entity: str = 'trevenl',
+               int_rew_weight_init: float = 1.0,
+               int_rew_weight_end: float = 0.0,
+               rew_decrease_steps: int = 20,
+               calibration: bool = False,
+               sample_with_eps_std: bool = False,
                ):
     assert exploration in ['optimistic', 'pets',
-                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+                           'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
+    if regression_model == 'GP':
+        import jax
+        jax.config.update("jax_enable_x64", True)
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
                                                 transition_steps=linear_scheduler_steps)
@@ -72,10 +78,19 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   exponent=exponent,
                   margin_factor=margin_factor,
                   dt=dt,
+                  int_rew_weight_init=int_rew_weight_init,
+                  int_rew_weight_end=int_rew_weight_end,
+                  rew_decrease_steps=rew_decrease_steps,
+                  calibration=calibration,
+                  sample_with_eps_std=sample_with_eps_std,
+                  env_name='rccar',
                   )
 
-
     env = RCCar(margin_factor=margin_factor, dt=dt)
+
+    int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
+                                        end_value=int_rew_weight_end,
+                                        transition_steps=rew_decrease_steps)
 
     class RCCarEnvReward(Reward):
         _angle_idx: int = 2
@@ -146,7 +161,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
             logging_wandb=log_wandb,
@@ -163,7 +178,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
             num_training_steps=num_training_points,
             output_stds=1e-3 * jnp.ones(env.observation_size),
             beta=exploration_factor * jnp.ones(shape=(env.observation_size,)),
-            features=(64, 64, 64),
+            features=(256,) * 2,
             bnn_type=ProbabilisticFSVGDEnsemble,
             num_particles=5,
             logging_wandb=log_wandb,
@@ -210,7 +225,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
     if exploration == 'optimistic':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': False,
-                                  'int_reward_weight': 1.0}
+                                  'int_reward_weight': int_reward_weight,
+                                  'sample_with_eps_std': sample_with_eps_std,
+                                  }
     elif exploration == 'hucrl':
         agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': True}
@@ -264,6 +281,11 @@ def main(args):
                horizon=args.horizon,
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
+               int_rew_weight_init=args.int_rew_weight_init,
+               int_rew_weight_end=args.int_rew_weight_end,
+               rew_decrease_steps=args.rew_decrease_steps,
+               calibration=bool(args.calibration),
+               sample_with_eps_std=bool(args.sample_with_eps_std),
                )
 
 
@@ -286,12 +308,16 @@ if __name__ == '__main__':
     parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='FSVGD')
-    parser.add_argument('--max_time_factor', type=int, default=30)
+    parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--exploration_factor', type=float, default=2.0)
     parser.add_argument('--horizon', type=int, default=100)
-    parser.add_argument('--log_wandb', type=int, default=0)
+    parser.add_argument('--log_wandb', type=int, default=1)
     parser.add_argument('--entity', type=str, default='trevenl')
+    parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_end', type=float, default=0.1)
+    parser.add_argument('--rew_decrease_steps', type=int, default=20)
+    parser.add_argument('--calibration', type=int, default=1)
+    parser.add_argument('--sample_with_eps_std', type=int, default=0)
 
     args = parser.parse_args()
     main(args)
