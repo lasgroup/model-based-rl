@@ -228,7 +228,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         statistical_model=model,
         optimizer=optimizer,
         episode_length=horizon,
-        reward_model=PendulumReward(),
+        reward_model=PendulumReward(env),
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
@@ -268,7 +268,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default='Model_based_pets')
-    parser.add_argument('--num_offline_samples', type=int, default=200)
+    parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)

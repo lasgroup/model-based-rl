@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['PendulumGeneral_iCEM_Nov19_15_00'],
+    'project_name': ['PendulumGeneral_iCEM_Nov19_15_30'],
     'num_offline_samples': [0],
     'optimizer_horizon': [20],
     'num_online_samples': [200],
