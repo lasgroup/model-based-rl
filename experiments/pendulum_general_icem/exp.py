@@ -157,10 +157,10 @@ def experiment(project_name: str = 'GPUSpeedTest',
         agent_class = PETSModelBasedAgent
 
     class PendulumReward(Reward):
-        def __init__(self, env: PendulumEnv):
+        def __init__(self, env: PendulumEnv, reward_source: str = 'gym'):
             super().__init__(x_dim=3, u_dim=1)
             self.env = env
-            # self.reward_source = TODO
+            self.reward_source = reward_source
 
         def __call__(self,
                      x: chex.Array,
@@ -173,8 +173,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
             target_angle = self.env.reward_params.target_angle
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-            reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
-                                                        0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
+            if self.reward_source == 'gym':
+                reward = -(self.env.reward_params.angle_cost * diff_th ** 2 +
+                           0.1 * omega ** 2) - self.env.reward_params.control_cost * u ** 2
+            else:
+                reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
+                                                            0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params

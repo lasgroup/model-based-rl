@@ -9,6 +9,7 @@ general_configs = {
     'deterministic_policy_for_data_collection': [0],
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
+    'reward_source': ['gym'],
     'seed': list(range(5)),
     'num_episodes': [10],
     'bnn_steps': [15_000],
@@ -33,7 +34,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='23:59:00',
+                          duration='3:59:00',
                           prompt=True,
                           mem=16000)
 

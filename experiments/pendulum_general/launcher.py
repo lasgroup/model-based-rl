@@ -6,6 +6,7 @@ general_configs = {
     'num_offline_samples': [0],
     'sac_horizon': [100],
     'deterministic_policy_for_data_collection': [0],
+    'reward_source': ['gym'],
     'seed': list(range(5)),
     'num_episodes': [10],
     'sac_steps': [100_000],
@@ -31,7 +32,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='23:59:00',
+                          duration='3:59:00',
                           prompt=True,
                           mem=16000)
 
