@@ -448,25 +448,16 @@ class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
         # Create state-action pair
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        scale_std = model_output.epistemic_std * self.sample_with_eps_std
+        # Use normalized (scale-invariant) disagreement
+        int_reward = jnp.linalg.norm(model_output.epistemic_std /
+                                     dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
+        x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
+        x_next = x_next_dist.sample(seed=key_sample_x_next)
         if self.predict_difference:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std * self.sample_with_eps_std
-            # Use normalized (scale-invariant) disagreement
-            int_reward = jnp.linalg.norm(model_output.epistemic_std /
-                                         dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
-            delta_x_dist = Normal(loc=model_output.mean, scale=scale_std)
-            delta_x = delta_x_dist.sample(seed=key_sample_x_next)
-            x_next = x + delta_x
-        else:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std * self.sample_with_eps_std
-            # Use normalized (scale-invariant) disagreement
-            int_reward = jnp.linalg.norm(model_output.epistemic_std /
-                                         dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
-            x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
-            x_next = x_next_dist.sample(seed=key_sample_x_next)
+            x_next = x + x_next
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,
@@ -779,12 +770,12 @@ class OMBRLSystem(PetsSystem):
         :param system_params: parameters of the system
         :return: Tuple of next state, reward, updated system parameters
         """
-        assert x.shape == (self.x_dim, ) and u.shape == (self.u_dim, )
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
         x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
         next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
         x_next = x_next_dist.sample(seed=next_state_key)
         # next state should also include the intrinsic reward
-        assert x_next.shape == (self.x_dim + 1, )
+        assert x_next.shape == (self.x_dim + 1,)
         # extract next state and intrinsic reward
         x_next, int_reward = x_next[:-1], x_next[-1].sum()
         reward, new_reward_params = self.get_reward(x, u, system_params.reward_params, x_next, reward_key)

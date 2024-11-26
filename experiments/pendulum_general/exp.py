@@ -51,7 +51,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   regression_model=regression_model
                   )
 
-    env = PendulumEnv(reward_source='dm-control')
+    env = PendulumEnv(reward_source='dm-control', margin_factor=20.0)
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 

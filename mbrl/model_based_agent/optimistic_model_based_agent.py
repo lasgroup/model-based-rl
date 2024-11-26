@@ -15,7 +15,7 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
                  *args, **kwargs):
         self.use_hallucinated_controls = use_hallucinated_controls
         if isinstance(int_reward_weight, float):
-            self.num_training_steps = optax.constant_schedule(int_reward_weight)
+            self.int_reward_weight = optax.constant_schedule(int_reward_weight)
         else:
             self.int_reward_weight = int_reward_weight
         import warnings
