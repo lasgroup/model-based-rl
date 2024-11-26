@@ -1,10 +1,11 @@
-from .base_model_based_agent import BaseModelBasedAgent, ModelBasedAgentState
+from .base_model_based_agent import ModelBasedAgentState
+from .continuous_base_model_based_agent import ContinuousBaseModelBasedAgent
 from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.optimizers.policy_optimizers.brax_optimizers import BraxOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor
-from mbrl.model_based_agent.system_wrapper import OptimisticExplorationSystem, OptimisticExplorationDynamics, \
-    ExplorationReward, PetsSystem, PetsDynamics, ExplorationDynamics, ExplorationSystem
+from mbrl.model_based_agent.system_wrapper import ContinuousOptimisticExplorationSystem, ContinuousOptimisticExplorationDynamics, \
+    ContinuousExplorationReward, ContinuousPetsSystem, ContinuousPetsDynamics, ContinuousExplorationDynamics, ContinuousExplorationSystem
 from mbpo.utils.type_aliases import OptimizerState
 import chex
 import jax.random as jr
@@ -15,7 +16,7 @@ from mbrl.utils.brax_utils import EnvInteractor
 import copy
 
 
-class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
+class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAgent):
     def __init__(self,
                  env: BraxEnv,
                  eval_envs: List[BraxEnv],
@@ -23,7 +24,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                  *args,
                  **kwargs):
         super().__init__(
-            reward_model=ExplorationReward(x_dim=env.observation_size, u_dim=env.action_size),
+            reward_model=ContinuousExplorationReward(x_dim=env.observation_size, u_dim=env.action_size),
             optimizer=optimizer,
             env=env,
             eval_env=env,
@@ -42,7 +43,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = ExplorationDynamics, ExplorationSystem, PetsActor
+        dynamics, system, actor = ContinuousExplorationDynamics, ContinuousExplorationSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
@@ -75,7 +76,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
     def prepare_actors_for_reward_models(self, optimizer: BaseOptimizer, key: chex.Array) -> List[Tuple[Actor,
     OptimizerState]]:
         actors_and_opt_states = []
-        dynamics_type, system_type, actor_type = PetsDynamics, PetsSystem, PetsActor
+        dynamics_type, system_type, actor_type = ContinuousPetsDynamics, ContinuousPetsSystem, PetsActor
         for reward_model in self.reward_model_list:
             optimizer_new = copy.deepcopy(optimizer)
             if isinstance(optimizer_new, BraxOptimizer):
@@ -168,7 +169,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
             for i in range(self.num_rewards):
                 env_interactor = self.env_interactors[i]
                 actor, opt_state = actors_for_reward_models[i]
-                metrics = env_interactor.run_evaluation(actor=actor,
+                metrics, data = env_interactor.run_evaluation(actor=actor,
                                                         actor_state=opt_state)
                 metrics = {k + '_task_' + str(i): v for k, v in metrics.items()}
                 if self.log_to_wandb:
@@ -197,14 +198,14 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
         return agent_state, actors_for_reward_models
 
 
-class OptimisticActiveExplorationModelBasedAgent(PetsActiveExplorationModelBasedAgent):
+class ContinuousOptimisticActiveExplorationModelBasedAgent(ContinuousPetsActiveExplorationModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = OptimisticExplorationDynamics, OptimisticExplorationSystem, OptimisticActor
+        dynamics, system, actor = ContinuousOptimisticExplorationDynamics, ContinuousOptimisticExplorationSystem, OptimisticActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
