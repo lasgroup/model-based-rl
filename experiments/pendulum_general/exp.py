@@ -62,7 +62,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   weight_decay=weight_decay
                   )
 
-    env = PendulumEnv(reward_source='dm-control')
+    env = PendulumEnv(reward_source=reward_source)
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
