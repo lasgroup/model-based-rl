@@ -1,21 +1,5 @@
 import argparse
 
-import chex
-import jax.numpy as jnp
-import jax.random as jr
-import wandb
-from brax.training.replay_buffers import UniformSamplingQueue
-from brax.training.types import Transition
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from distrax import Normal
-from jax.nn import swish
-from mbpo.optimizers import SACOptimizer
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-
-from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent.active_exploration_model_based_agents import PetsActiveExplorationModelBasedAgent
-from mbrl.utils.offline_data import PendulumOfflineData
-
 ENTITY = 'kiten'
 
 
@@ -26,10 +10,29 @@ def experiment(
         sac_horizon: int = 100,
         deterministic_policy_for_data_collection: bool = False
 ):
+    import chex
+    import jax.numpy as jnp
+    import jax.random as jr
+    import wandb
+    from brax.training.replay_buffers import UniformSamplingQueue
+    from brax.training.types import Transition
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from distrax import Normal
+    from jax.nn import swish
+    from mbpo.optimizers import SACOptimizer
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+
+    from mbrl.envs.pendulum import PendulumEnv
+    from mbrl.model_based_agent.active_exploration_model_based_agents import PetsActiveExplorationModelBasedAgent
+    from mbrl.utils.offline_data import PendulumOfflineData
+
     config = dict(num_offline_samples=num_offline_samples,
-                  sac_horizon=sac_horizon,
-                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-                  )
+                sac_horizon=sac_horizon,
+                deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                regression_model='ensemble',
+                exploration='optimistic',
+                reward_model='dm-control',
+                )
 
     swing_up_env = PendulumEnv(reward_source='dm-control')
     swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
