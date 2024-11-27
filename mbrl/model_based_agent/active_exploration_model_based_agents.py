@@ -166,9 +166,9 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                                                                   episode_idx=episode_idx,
                                                                   )
             for i in range(self.num_rewards):
-                env_interactor = self.env_interactors[i]
+                env_interactor: EnvInteractor = self.env_interactors[i]
                 actor, opt_state = actors_for_reward_models[i]
-                metrics = env_interactor.run_evaluation(actor=actor,
+                metrics, data = env_interactor.run_evaluation(actor=actor,
                                                         actor_state=opt_state)
                 metrics = {k + '_task_' + str(i): v for k, v in metrics.items()}
                 if self.log_to_wandb:
