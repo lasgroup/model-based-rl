@@ -30,7 +30,7 @@ def experiment(
                 sac_horizon=sac_horizon,
                 deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                 regression_model='ensemble',
-                exploration='optimistic',
+                exploration='pets',
                 reward_model='dm-control',
                 )
 
