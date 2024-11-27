@@ -157,7 +157,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         agent_class = PETSModelBasedAgent
 
     class PendulumReward(Reward):
-        def __init__(self, env: PendulumEnv, reward_source: str = 'gym'):
+        def __init__(self, env: PendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
             self.env = env
             self.reward_source = reward_source
@@ -192,7 +192,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         statistical_model=model,
         optimizer=optimizer,
         episode_length=num_online_samples,
-        reward_model=PendulumReward(env),
+        reward_model=PendulumReward(env, reward_source),
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,

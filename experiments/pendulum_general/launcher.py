@@ -2,11 +2,11 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['PendulumGeneral_SAC_Nov19_15_30'],
+    'project_name': ['PendulumGeneral_SAC_Nov27_22_30'],
     'num_offline_samples': [0],
     'sac_horizon': [100],
     'deterministic_policy_for_data_collection': [0],
-    'reward_source': ['gym'],
+    'reward_source': ['dm-control','gym'],
     'seed': list(range(5)),
     'num_episodes': [10],
     'sac_steps': [100_000],

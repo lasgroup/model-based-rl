@@ -2,14 +2,14 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['PendulumGeneral_iCEM_Nov19_15_30'],
+    'project_name': ['PendulumGeneral_iCEM_Nov27_22_30'],
     'num_offline_samples': [0],
     'optimizer_horizon': [20],
     'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
-    'reward_source': ['gym'],
+    'reward_source': ['dm-control','gym'],
     'seed': list(range(5)),
     'num_episodes': [10],
     'bnn_steps': [15_000],

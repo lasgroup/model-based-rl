@@ -49,6 +49,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   sac_horizon=sac_horizon,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   num_online_samples=num_online_samples,
+                  reward_source=reward_source,
                   seed=seed,
                   num_episodes=num_episodes,
                   sac_steps=sac_steps,
@@ -197,7 +198,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         agent_class = PETSModelBasedAgent
 
     class PendulumReward(Reward):
-        def __init__(self, env: PendulumEnv, reward_source: str = 'gym'):
+        def __init__(self, env: PendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
             self.env = env
             self.reward_source = reward_source
@@ -232,7 +233,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         statistical_model=model,
         optimizer=optimizer,
         episode_length=horizon,
-        reward_model=PendulumReward(env),
+        reward_model=PendulumReward(env, reward_source),
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
@@ -256,6 +257,7 @@ def main(args):
                num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               reward_source=args.reward_source,
                seed=args.seed,
                num_episodes=args.num_episodes,
                sac_steps=args.sac_steps,
@@ -275,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
+    parser.add_argument('--reward_source', type=str, default='dm-control')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--sac_steps', type=int, default=20_000)
