@@ -20,7 +20,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
                beta: float = 2.0,
-               weight_decay: float = 0.0
+               weight_decay: float = 0.0,
+               env_name: str = 'swing-up',
+               eval_env_name: str = 'swing-up'
                ):
     
     import chex
@@ -48,6 +50,9 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
+    assert env_name in ['swing-up', 'balance']
+    assert eval_env_name in ['swing-up', 'balance']
+
 
     config = dict(num_offline_samples=num_offline_samples,
                 optimizer_horizon=optimizer_horizon,
@@ -66,14 +71,27 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
                   beta=beta,
-                  weight_decay=weight_decay
+                  weight_decay=weight_decay,
+                  env=env_name,
+                  eval_env=eval_env_name
                   )
 
-    env = ContinuousPendulumEnv(reward_source=reward_source) #,
-                                # noise_level=jnp.array(noise_level),
-                                # init_noise_key=jr.PRNGKey(12)) TODO: Noise level
-    
-    eval_env = ContinuousPendulumEnv(reward_source=reward_source)
+    swing_up_env = ContinuousPendulumEnv(reward_source=reward_source)
+    balance_env = ContinuousPendulumEnv(reward_source=reward_source, initial_angle=0.)
+
+    if env_name == 'swing_up':
+        env = swing_up_env
+    elif env_name == 'balance':
+        env = balance_env
+    else:
+        env = swing_up_env
+
+    if eval_env_name == 'swing_up':
+        eval_env = swing_up_env
+    elif eval_env_name == 'balance':
+        eval_env = balance_env 
+    else:
+        eval_env = swing_up_env
 
     # adjust control cost
     control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
@@ -207,9 +225,11 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
 
-    class DMPendulumReward(Reward):
-        def __init__(self):
+    class PendulumReward(Reward):
+        def __init__(self, reward_env: ContinuousPendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
+            self.env = reward_env
+            self.reward_source = reward_source
 
         def __call__(self,
                      x: chex.Array,
@@ -219,24 +239,21 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
                      ):
             assert x.shape == (3,) and u.shape == (1,)
             theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
-            target_angle = env.reward_params.target_angle
+            target_angle = self.env.reward_params.target_angle
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-            reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                   0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
+            if self.reward_source == 'gym':
+                reward = -(self.env.reward_params.angle_cost * diff_th ** 2 +
+                           0.1 * omega ** 2) - self.env.reward_params.control_cost * u ** 2
+            else:
+                reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
+                                                            0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': env.dt}
-
-    if reward_source == 'dm-control':
-        reward_model = DMPendulumReward()
-    elif reward_source == 'gym':
-        reward_model = NotImplementedError(f'Unknown reward source {reward_source}') # GymPendulumReward()
-    else:   
-        raise NotImplementedError(f'Unknown reward source {reward_source}')
+            return {'dt': self.env.dt}
 
     agent = agent_class(
         env=env,
@@ -244,7 +261,7 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
         statistical_model=model,
         optimizer=optimizer,
         episode_length=num_online_samples,
-        reward_model=reward_model,
+        reward_model=PendulumReward(env, reward_source),
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
@@ -265,7 +282,6 @@ def experiment(project_name: str = 'ICEM_CT_Pendulum',
     wandb.finish()
     print("Ended wandb")
 
-
 def main(args):
     experiment(project_name=args.project_name,
                num_offline_samples=args.num_offline_samples,
@@ -285,10 +301,10 @@ def main(args):
                reset_statistical_model=bool(args.reset_statistical_model),
                regression_model=args.regression_model,
                beta=args.beta,
-               weight_decay=args.weight_decay
-               )
-    print("Finished experiment")
-
+               weight_decay=args.weight_decay,
+               env_name=args.env,
+               eval_env_name=args.eval_env
+    )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -311,6 +327,8 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='deterministic_FSVGD')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
+    parser.add_argument('--env', type=str, default='swing-up')
+    parser.add_argument('--eval_env', type=str, default='swing-up')
 
     args = parser.parse_args()
     main(args)
