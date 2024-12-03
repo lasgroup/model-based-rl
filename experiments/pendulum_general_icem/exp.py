@@ -21,7 +21,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
                reset_statistical_model: bool = True,
                regression_model: str = 'probabilistic_ensemble',
                beta: float = 2.0,
-               weight_decay: float = 0.0
+               weight_decay: float = 0.0,
+               env_name: str = 'swing-up',
+               eval_env_name: str = 'swing-up'
                ):
     import chex
     import jax.numpy as jnp
@@ -44,6 +46,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
+    assert env_name in ['swing-up', 'balance']
+    assert eval_env_name in ['swing-up', 'balance']
+
 
     config = dict(num_offline_samples=num_offline_samples,
                   optimizer_horizon=optimizer_horizon,
@@ -61,14 +66,23 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   reset_statistical_model=reset_statistical_model,
                   regression_model=regression_model,
                   beta=beta,
-                  weight_decay=weight_decay
+                  weight_decay=weight_decay,
+                  env=env_name,
+                  eval_env=eval_env_name
                   )
 
     swing_up_env = PendulumEnv(reward_source=reward_source)
     balance_env = PendulumEnv(reward_source=reward_source, initial_angle=0.)
 
-    env = balance_env
-    eval_env = swing_up_env
+    if env_name == 'swing_up':
+        env = swing_up_env
+    elif env_name == 'balance':
+        env = balance_env
+
+    if eval_env_name == 'swing_up':
+        eval_env = swing_up_env
+    elif eval_env_name == 'balance':
+        eval_env = balance_env 
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -233,7 +247,9 @@ def main(args):
         reset_statistical_model=bool(args.reset_statistical_model),
         regression_model=args.regression_model,
         beta=args.beta,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        env=args.env,
+        eval_env=args.eval_env
     )
 
 if __name__ == '__main__':
@@ -256,6 +272,8 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='FSVGD')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
+    parser.add_argument('--env', type=str, default='swing-up')
+    parser.add_argument('--eval_env', type=str, default='swing-up')
 
     args = parser.parse_args()
     main(args)
