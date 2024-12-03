@@ -78,11 +78,15 @@ def experiment(project_name: str = 'GPUSpeedTest',
         env = swing_up_env
     elif env_name == 'balance':
         env = balance_env
+    else:
+        env = swing_up_env
 
     if eval_env_name == 'swing_up':
         eval_env = swing_up_env
     elif eval_env_name == 'balance':
         eval_env = balance_env 
+    else:
+        eval_env = swing_up_env
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -248,8 +252,8 @@ def main(args):
         regression_model=args.regression_model,
         beta=args.beta,
         weight_decay=args.weight_decay,
-        env=args.env,
-        eval_env=args.eval_env
+        env_name=args.env,
+        eval_env_name=args.eval_env
     )
 
 if __name__ == '__main__':
