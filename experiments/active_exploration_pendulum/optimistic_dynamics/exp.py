@@ -8,7 +8,8 @@ def experiment(
         project_name: str = 'GPUSpeedTest',
         num_offline_samples: int = 100,
         sac_horizon: int = 100,
-        deterministic_policy_for_data_collection: bool = False
+        deterministic_policy_for_data_collection: bool = False,
+        predict_difference: bool = False
 ):
     import chex
     import jax.numpy as jnp
@@ -32,6 +33,7 @@ def experiment(
                   regression_model='ensemble',
                   exploration='optimistic',
                   reward_model='dm-control',
+                  predict_difference=predict_difference,
                   )
 
     swing_up_env = PendulumEnv(reward_source='dm-control')
@@ -155,6 +157,7 @@ def experiment(
         num_eval_envs=1,
         log_to_wandb=True,
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+        predict_difference=predict_difference,
     )
 
     agent_state, actors_for_reward_models = agent.run_episodes(num_episodes=20,
@@ -168,7 +171,8 @@ def main(args):
     experiment(project_name=args.project_name,
                num_offline_samples=args.num_offline_samples,
                sac_horizon=args.sac_horizon,
-               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection))
+               deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
+               predict_difference=bool(args.predict_difference))
 
 
 if __name__ == '__main__':
@@ -180,6 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--train_steps_sac', type=int, default=2_000)
     parser.add_argument('--train_steps_bnn', type=int, default=300)
+    parser.add_argument('--predict_difference', type=int, default=1)
 
     args = parser.parse_args()
     main(args)
