@@ -64,7 +64,11 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   weight_decay=weight_decay
                   )
 
-    env = PendulumEnv(reward_source=reward_source)
+    swing_up_env = PendulumEnv(reward_source=reward_source)
+    balance_env = PendulumEnv(reward_source=reward_source, initial_angle=0.)
+
+    env = balance_env
+    eval_env = swing_up_env
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -157,9 +161,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
         agent_class = PETSModelBasedAgent
 
     class PendulumReward(Reward):
-        def __init__(self, env: PendulumEnv, reward_source: str):
+        def __init__(self, reward_env: PendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
-            self.env = env
+            self.env = reward_env
             self.reward_source = reward_source
 
         def __call__(self,
@@ -188,7 +192,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent = agent_class(
         env=env,
-        eval_env=env,
+        eval_env=eval_env,
         statistical_model=model,
         optimizer=optimizer,
         episode_length=num_online_samples,
