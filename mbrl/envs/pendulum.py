@@ -28,7 +28,7 @@ class PendulumRewardParams:
 
 
 class PendulumEnv(Env):
-    def __init__(self, reward_source: str = 'gym'):
+    def __init__(self, reward_source: str = 'gym', initial_angle: float = jnp.pi):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
         bound = 0.1
@@ -39,12 +39,13 @@ class PendulumEnv(Env):
                                                 margin=margin_factor * bound,
                                                 value_at_margin=value_at_margin,
                                                 sigmoid='long_tail')
+        self.initial_angle = initial_angle
 
     def reset(self,
               rng: jax.Array) -> State:
         first_info: dict = {'t': jnp.array(0.0),}
         return State(pipeline_state=None,
-                     obs=jnp.array([-1.0, 0.0, 0.0]),
+                     obs=jnp.array([jnp.cos(self.initial_angle), jnp.sin(self.initial_angle), 0.0]),
                      reward=jnp.array(0.0),
                      done=jnp.array(0.0),
                      info=first_info)
@@ -141,3 +142,13 @@ class PendulumEnv(Env):
 
     def backend(self) -> str:
         return 'positional'
+
+
+if __name__ == "__main__":
+    env = PendulumEnv(initial_angle=jnp.pi)
+    initial_state = env.reset(jax.numpy.zeros(0))
+    initial_action = jax.numpy.ones(env.action_size)
+    next_state = env.step(initial_state, initial_action)
+
+    for ii in range(10):
+        next_state = env.step(next_state, initial_action)
