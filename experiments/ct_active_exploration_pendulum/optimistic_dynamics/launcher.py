@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_CT_Pendulum_Nov26_17_00_FirstTest'
+PROJECT_NAME = 'Active_CT_Pendulum_Dec05_17_00_FixedPETS_SwingUpSwingDown'
 
 general_configs = {
     'seed': list(range(5)),
@@ -12,7 +12,8 @@ general_configs = {
     'deterministic_policy_for_data_collection': [0],
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
-    'num_episodes': [10],
+    'reward_source': ['dm-control'],
+    'num_episodes': [20],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','pets'],
