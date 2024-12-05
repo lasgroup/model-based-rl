@@ -21,7 +21,6 @@ general_configs = {
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'env': ['swing-up','balance'],
-    'eval_env': [['swing-up','balance']],
 }
 
 

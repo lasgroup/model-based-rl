@@ -271,6 +271,6 @@ if __name__ == '__main__':
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--env', type=str, default='swing-up')
-    parser.add_argument('--eval_envs', nargs='+', default=['swing-up','swing-down'], help="List of evaluation environments") 
+    parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 
     args = parser.parse_args()
     main(args)
