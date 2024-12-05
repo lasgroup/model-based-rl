@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_CT_Pendulum_Dec05_17_00_FixedPETS_SwingUpSwingDown'
+PROJECT_NAME = 'Active_CT_Pendulum_Dec05_17_15_PermuteSwingUpBalance'
 
 general_configs = {
     'seed': list(range(5)),
@@ -20,6 +20,8 @@ general_configs = {
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
+    'env': ['swing-up','balance'],
+    'eval_env': [['swing-up','balance']],
 }
 
 
