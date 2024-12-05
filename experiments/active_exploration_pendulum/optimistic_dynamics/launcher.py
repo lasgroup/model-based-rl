@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'opax_optimistic_April_test2'
+PROJECT_NAME = 'opax_optimistic_December_Test3'
 
 general_configs = {
     'seed': list(range(5)),
@@ -11,6 +11,7 @@ general_configs = {
     'deterministic_policy_for_data_collection': [0],
     'train_steps_sac': [500_000],
     'train_steps_bnn': [50_000],
+    'predict_difference': [0,1],
 }
 
 
