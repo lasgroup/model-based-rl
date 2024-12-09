@@ -1,19 +1,19 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_CT_Pendulum_Dec05_17_15_PermuteSwingUpBalance'
+PROJECT_NAME = 'Active_CT_Pendulum_Dec09_18_00_MoreOnlineSamples'
 
 general_configs = {
     'seed': list(range(5)),
     'project_name': [PROJECT_NAME],
     'num_offline_samples': [0],
     'optimizer_horizon': [20],
-    'num_online_samples': [200],
+    'num_online_samples': [300],
     'deterministic_policy_for_data_collection': [0],
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
-    'reward_source': ['dm-control'],
-    'num_episodes': [20],
+    'reward_source': ['dm-control','gym'],
+    'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','pets'],
@@ -21,6 +21,7 @@ general_configs = {
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'env': ['swing-up','balance'],
+    # 'eval_envs': [['swing-up','balance']], # bugged on EULER
 }
 
 
