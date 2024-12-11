@@ -33,6 +33,8 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
         self.statistical_model = statistical_model
         self.aleatoric_noise_in_prediction = aleatoric_noise_in_prediction
         self.predict_difference = predict_difference
+        assert (self.predict_difference == False), \
+            f'self.predict_difference must be False for continuous dynamics, got: {self.predict_difference}.'
         self.dt = dt
 
     def vmap_input_axis(self, data_axis: int = 0) -> DynamicsParams:
@@ -54,21 +56,13 @@ class ContinuousPetsDynamics(Dynamics, Generic[ModelState]):
         # Create state-action pair
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
-        if self.predict_difference:
-            raise NotImplementedError
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std
-            delta_x_dist = Normal(loc=model_output.mean, scale=scale_std)
-            delta_x = delta_x_dist.sample(seed=key_sample_x_next)
-            x_next = x + delta_x
-        else:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std
-            dx_dist = Normal(loc=model_output.mean, scale=scale_std)
-            dx_next = dx_dist.sample(seed=key_sample_x_next)
-            x_next = x + dx_next * self.dt
+
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        scale_std = model_output.epistemic_std
+        dx_dist = Normal(loc=model_output.mean, scale=scale_std)
+        dx_next = dx_dist.sample(seed=key_sample_x_next)
+        x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,
@@ -100,13 +94,9 @@ class ContinuousOptimisticDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         model_output = self.statistical_model(input=z,
                                               statistical_model_state=dynamics_params.statistical_model_state)
-        if self.predict_difference:
-            raise NotImplementedError
-            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + delta_x
-        else:
-            dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + dx_next * self.dt
+
+        dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+        x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
         aleatoric_std = model_output.aleatoric_std * self.dt
@@ -169,21 +159,13 @@ class ContinuousExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState])
         # Create state-action pair
         z = jnp.concatenate([x, u])
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
-        if self.predict_difference:
-            raise NotImplementedError
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std
-            delta_x_dist = Normal(loc=model_output.mean, scale=scale_std)
-            delta_x = delta_x_dist.sample(seed=key_sample_x_next)
-            x_next = x + delta_x
-        else:
-            model_output = self.statistical_model(input=z,
-                                                  statistical_model_state=dynamics_params.statistical_model_state)
-            scale_std = model_output.epistemic_std
-            dx_dist = Normal(loc=model_output.mean, scale=scale_std)
-            dx_next = dx_dist.sample(seed=key_sample_x_next)
-            x_next = x + dx_next * self.dt
+
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        scale_std = model_output.epistemic_std
+        dx_dist = Normal(loc=model_output.mean, scale=scale_std)
+        dx_next = dx_dist.sample(seed=key_sample_x_next)
+        x_next = x + dx_next * self.dt
 
         aleatoric_std = model_output.aleatoric_std # TODO * self.dt?
         intrinsic_reward = self.get_intrinsic_reward(scale_std, aleatoric_std)
@@ -217,13 +199,9 @@ class ContinuousOptimisticExplorationDynamics(ContinuousExplorationDynamics, Gen
         next_key, key_sample_x_next = jr.split(dynamics_params.key)
         model_output = self.statistical_model(input=z,
                                               statistical_model_state=dynamics_params.statistical_model_state)
-        if self.predict_difference:
-            raise NotImplementedError
-            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + delta_x
-        else:
-            dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + dx_next * self.dt
+
+        dx_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+        x_next = x + dx_next * self.dt
 
         # Concatenate state and last num_frame_stack actions
         aleatoric_std = model_output.aleatoric_std # TODO: dt?

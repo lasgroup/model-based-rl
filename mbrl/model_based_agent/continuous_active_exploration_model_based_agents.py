@@ -363,7 +363,7 @@ if __name__ == "__main__":
                              true_buffer=sac_buffer,
                              **sac_kwargs)
 
-    agent = PetsActiveExplorationModelBasedAgent(
+    agent = ContinuousPetsActiveExplorationModelBasedAgent(
         env=env,
         eval_envs=[env, swing_down_env],
         statistical_model=model,

@@ -27,6 +27,7 @@ from mbrl.utils.brax_utils import EnvInteractor
 class ContinuousBaseModelBasedAgent(BaseModelBasedAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        assert (self.predict_difference == False), f'self.predict_difference must be False for continuous agent, got: {self.predict_difference}.'
 
     def _collected_buffer_to_train_data(self, collected_buffer_state: ReplayBufferState):
         idx = jnp.arange(start=collected_buffer_state.sample_position, stop=collected_buffer_state.insert_position)
