@@ -108,6 +108,37 @@ class MeanDynamics(PetsDynamics, Generic[ModelState]):
         return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
 
+class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.u_dim = self.x_dim + self.u_dim
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # Create state-action pair
+        a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
+        z = jnp.concatenate([x, a])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        if self.predict_difference:
+            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+            x_next = x + delta_x
+        else:
+            x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
+
+        # Concatenate state and last num_frame_stack actions
+        aleatoric_std = model_output.aleatoric_std
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
+
+
 class WtsScPetsDynamics(Dynamics, Generic[ModelState]):
     def __init__(self,
                  x_dim: int,
@@ -327,38 +358,7 @@ class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
         return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
 
 
-class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.u_dim = self.x_dim + self.u_dim
-
-    def next_state(self,
-                   x: chex.Array,
-                   u: chex.Array,
-                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
-        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
-        # Create state-action pair
-        a, eta = jnp.split(u, axis=-1, indices_or_sections=[self.u_dim - self.x_dim])
-        z = jnp.concatenate([x, a])
-        next_key, key_sample_x_next = jr.split(dynamics_params.key)
-        model_output = self.statistical_model(input=z,
-                                              statistical_model_state=dynamics_params.statistical_model_state)
-        if self.predict_difference:
-            delta_x = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-            x_next = x + delta_x
-        else:
-            x_next = model_output.mean + dynamics_params.statistical_model_state.beta * model_output.epistemic_std * eta
-
-        # Concatenate state and last num_frame_stack actions
-        aleatoric_std = model_output.aleatoric_std
-        if not self.aleatoric_noise_in_prediction:
-            aleatoric_std = 0 * aleatoric_std
-        new_dynamics_params = dynamics_params.replace(key=next_key,
-                                                      statistical_model_state=model_output.statistical_model_state)
-        return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
-
-
-class ExplorationDynamics(PetsDynamics, Generic[ModelState]):
+class PetsExplorationDynamics(PetsDynamics, Generic[ModelState]):
     def __init__(self, use_log: bool = True, scale_with_aleatoric_std: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_log = use_log
@@ -414,7 +414,44 @@ class ExplorationDynamics(PetsDynamics, Generic[ModelState]):
         return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
 
 
-class OptimisticExplorationDynamics(ExplorationDynamics, Generic[ModelState]):
+class MeanExplorationDynamics(PetsExplorationDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # Create state-action pair
+        z = jnp.concatenate([x, u])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+
+        if self.predict_difference:
+            x_next = x + model_output.mean
+        else:
+            x_next = model_output.mean
+
+        epistemic_std = model_output.epistemic_std
+        aleatoric_std = model_output.aleatoric_std
+        intrinsic_reward = self.get_intrinsic_reward(epistemic_std, aleatoric_std)
+        intrinsic_reward = jnp.atleast_1d(intrinsic_reward)
+
+        # Concatenate state and last num_frame_stack actions
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        # add intrinsic reward to the next state
+        x_next_with_reward = jnp.concatenate([x_next, intrinsic_reward], axis=-1)
+        aleatoric_std_with_reward = jnp.concatenate([aleatoric_std, jnp.zeros_like(intrinsic_reward)], axis=-1)
+        return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
+    
+
+class OptimisticExplorationDynamics(PetsExplorationDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u_dim = self.x_dim + self.u_dim
@@ -672,8 +709,8 @@ class ExplorationReward(Reward, ExplorationRewardParams):
         return ExplorationRewardParams()
 
 
-class ExplorationSystem(PetsSystem, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: ExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
+class PetsExplorationSystem(PetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: PetsExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
         if reward is None:
             reward = ExplorationReward(x_dim=dynamics.x_dim, u_dim=dynamics.u_dim)
         super().__init__(dynamics, reward)
@@ -715,7 +752,11 @@ class ExplorationSystem(PetsSystem, Generic[ModelState, RewardParams]):
         return new_system_state
 
 
-class OptimisticExplorationSystem(ExplorationSystem, Generic[ModelState, RewardParams]):
+class MeanExplorationSystem(PetsExplorationSystem, Generic[ModelState, RewardParams]):
+    pass
+
+
+class OptimisticExplorationSystem(PetsExplorationSystem, Generic[ModelState, RewardParams]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

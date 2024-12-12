@@ -111,7 +111,7 @@ def experiment(
                 reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
                                                             0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             else:
-                NotImplementedError()
+                raise ValueError(f"Invalid reward source: {self.reward_source}. Expected 'gym' or 'dm-control'.")            
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
@@ -174,7 +174,9 @@ def experiment(
             train_share=0.8,
             eval_frequency=5_000,
         )
-
+    else:
+        raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble' or 'deterministic_ensemble'.")
+    
     if optimizer == 'sac':
         sac_kwargs = {
             'num_timesteps': train_steps_sac,
