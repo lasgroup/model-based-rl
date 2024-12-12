@@ -39,7 +39,8 @@ def experiment(
 
     from mbrl.envs.pendulum import PendulumEnv
     from mbrl.model_based_agent.active_exploration_model_based_agents import\
-        PetsActiveExplorationModelBasedAgent, OptimisticActiveExplorationModelBasedAgent
+        PetsActiveExplorationModelBasedAgent, OptimisticActiveExplorationModelBasedAgent, \
+        MeanActiveExplorationModelBasedAgent
     from mbrl.utils.offline_data import PendulumOfflineData
 
     log_wandb = True
@@ -246,6 +247,10 @@ def experiment(
         agent_class = OptimisticActiveExplorationModelBasedAgent
     elif exploration == 'pets':
         agent_class = PetsActiveExplorationModelBasedAgent
+    elif exploration == 'mean':
+        agent_class = MeanActiveExplorationModelBasedAgent
+    else:
+        raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
     agent = agent_class(
         env=env,
