@@ -1,23 +1,44 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_DT_Pendulum_Dec03_16_30_PerformanceComparisonAugust'
+PROJECT_NAME = 'Active_DT_Pendulum_Dec12_13_00_FirstTest'
+ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(5)),
+    'seed': list(range(1)),
     'project_name': [PROJECT_NAME],
+    'entity': [ENTITY],
     'num_offline_samples': [0],
-    'sac_horizon': [100],
+    'num_online_samples': [100],
     'deterministic_policy_for_data_collection': [0],
-    'train_steps_sac': [500_000],
-    'train_steps_bnn': [50_000],
+    'reward_source': ['dm-control','gym'],
+    'num_episodes': [10],
+    'bnn_steps': [50_000],
     'predict_difference': [0,1],
+    'first_episode_for_policy_training': [0],
+    'exploration': ['optimistic','pets'],
+    'reset_statistical_model': [0],
+    'regression_model': ['probabilistic_ensemble'],
+    'beta': [2.0],
+    'env': ['swing-up','balance'],
 }
+
+sac_configs = {
+    'optimizer': ['sac'],
+    'train_steps_sac': [100_000],
+} | general_configs
+
+icem_configs = {
+    'optimizer': ['icem'],
+    'optimizer_horizon': [20],
+    'icem_num_steps': [10],
+    'icem_colored_noise_exponent': [1.0],
+} | general_configs
 
 
 def main():
     command_list = []
-    flags_combinations = dict_permutations(general_configs)
+    flags_combinations = dict_permutations(sac_configs) + dict_permutations(icem_configs)
     for flags in flags_combinations:
         cmd = generate_base_command(exp, flags=flags)
         command_list.append(cmd)
