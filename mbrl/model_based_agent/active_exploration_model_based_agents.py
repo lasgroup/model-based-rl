@@ -2,9 +2,10 @@ from .base_model_based_agent import BaseModelBasedAgent, ModelBasedAgentState
 from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.optimizers.policy_optimizers.brax_optimizers import BraxOptimizer
-from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor
+from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor, MeanActor
 from mbrl.model_based_agent.system_wrapper import OptimisticExplorationSystem, OptimisticExplorationDynamics, \
-    ExplorationReward, PetsSystem, PetsDynamics, ExplorationDynamics, ExplorationSystem
+    ExplorationReward, PetsSystem, PetsDynamics, PetsExplorationDynamics, PetsExplorationSystem, \
+    MeanExplorationSystem, MeanExplorationDynamics
 from mbpo.utils.type_aliases import OptimizerState
 import chex
 import jax.random as jr
@@ -42,7 +43,7 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = ExplorationDynamics, ExplorationSystem, PetsActor
+        dynamics, system, actor = PetsExplorationDynamics, PetsExplorationSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
@@ -195,6 +196,27 @@ class PetsActiveExplorationModelBasedAgent(BaseModelBasedAgent):
                                                                     episode_idx=episode_idx)
             print(f'End of Episode {episode_idx}')
         return agent_state, actors_for_reward_models
+
+
+class MeanActiveExplorationModelBasedAgent(PetsActiveExplorationModelBasedAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = MeanExplorationDynamics, MeanExplorationSystem, MeanActor
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
 
 
 class OptimisticActiveExplorationModelBasedAgent(PetsActiveExplorationModelBasedAgent):

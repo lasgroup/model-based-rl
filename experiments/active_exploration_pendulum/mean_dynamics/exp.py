@@ -24,17 +24,17 @@ def experiment(
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
     from mbrl.envs.pendulum import PendulumEnv
-    from mbrl.model_based_agent.active_exploration_model_based_agents import OptimisticActiveExplorationModelBasedAgent
+    from mbrl.model_based_agent.active_exploration_model_based_agents import MeanActiveExplorationModelBasedAgent
     from mbrl.utils.offline_data import PendulumOfflineData
 
     config = dict(num_offline_samples=num_offline_samples,
-                  sac_horizon=sac_horizon,
-                  deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-                  regression_model='ensemble',
-                  exploration='optimistic',
-                  reward_model='dm-control',
-                  predict_difference=predict_difference,
-                  )
+                sac_horizon=sac_horizon,
+                deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+                regression_model='ensemble',
+                exploration='mean',
+                reward_model='dm-control',
+                predict_difference=predict_difference,
+                )
 
     swing_up_env = PendulumEnv(reward_source='dm-control')
     swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
@@ -86,7 +86,7 @@ def experiment(
         output_stds=1e-3 * jnp.ones(swing_up_env.observation_size),
         features=(64, 64, 64),
         num_particles=5,
-        logging_wandb=True,
+        logging_wandb=False,
         return_best_model=True,
         eval_batch_size=64,
         train_share=0.8,
@@ -121,7 +121,7 @@ def experiment(
         'policy_activation': swish,
         'critic_hidden_layer_sizes': (128,) * 4,
         'critic_activation': swish,
-        'wandb_logging': True,
+        'wandb_logging': False,
         'return_best_model': True,
     }
     max_replay_size_true_data_buffer = 10 ** 4
@@ -145,7 +145,7 @@ def experiment(
                config=config
                )
 
-    agent = OptimisticActiveExplorationModelBasedAgent(
+    agent = MeanActiveExplorationModelBasedAgent(
         env=swing_up_env,
         eval_envs=[swing_up_env, swing_down_env],
         reward_model_list=[reward_model_swing_up, reward_model_swing_down],
@@ -160,7 +160,7 @@ def experiment(
         predict_difference=predict_difference,
     )
 
-    agent_state, actors_for_reward_models = agent.run_episodes(num_episodes=20,
+    agent_state, actors_for_reward_models = agent.run_episodes(num_episodes=10,
                                                                start_from_scratch=True,
                                                                key=key)
 
@@ -175,16 +175,17 @@ def main(args):
                predict_difference=bool(args.predict_difference))
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='Model_based_pets')
-    parser.add_argument('--num_offline_samples', type=int, default=10)
-    parser.add_argument('--sac_horizon', type=int, default=10)
+    parser.add_argument('--project_name', type=str, default='Model_based_mean')
+    parser.add_argument('--num_offline_samples', type=int, default=100)
+    parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
-    parser.add_argument('--train_steps_sac', type=int, default=2_000)
-    parser.add_argument('--train_steps_bnn', type=int, default=300)
-    parser.add_argument('--predict_difference', type=int, default=1)
+    parser.add_argument('--train_steps_sac', type=int, default=20_000)
+    parser.add_argument('--train_steps_bnn', type=int, default=3000)
+    parser.add_argument('--predict_difference', type=int, default=0)
 
     args = parser.parse_args()
     main(args)

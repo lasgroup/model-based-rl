@@ -5,6 +5,7 @@ from flax import struct
 import jax.numpy as jnp
 from jaxtyping import Float, Array
 from functools import partial
+import copy
 
 from mbrl.utils.tolerance_reward import ToleranceReward
 
@@ -30,6 +31,7 @@ class PendulumEnv(Env):
     def __init__(self,
                  reward_source: str = 'gym',
                  margin_factor: float = 10.0,
+                 initial_angle: float = jnp.pi
                  ):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
@@ -40,13 +42,16 @@ class PendulumEnv(Env):
                                                 margin=margin_factor * bound,
                                                 value_at_margin=value_at_margin,
                                                 sigmoid='long_tail')
+        self.initial_angle = initial_angle
 
     def reset(self,
               rng: jax.Array) -> State:
+        first_info: dict = {'t': jnp.array(0.0),}
         return State(pipeline_state=None,
-                     obs=jnp.array([-1.0, 0.0, 0.0]),
+                     obs=jnp.array([jnp.cos(self.initial_angle), jnp.sin(self.initial_angle), 0.0]),
                      reward=jnp.array(0.0),
-                     done=jnp.array(0.0), )
+                     done=jnp.array(0.0),
+                     info=first_info)
 
     def reward(self,
                x: Float[Array, 'observation_dim'],
@@ -94,13 +99,16 @@ class PendulumEnv(Env):
             next_reward = self.dm_reward(x, action)
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
+        
+        next_info = copy.deepcopy(state.info)
+        next_info['t'] += dt
 
         next_state = State(pipeline_state=state.pipeline_state,
                            obs=next_obs,
                            reward=next_reward,
                            done=state.done,
                            metrics=state.metrics,
-                           info=state.info)
+                           info=next_info)
         return next_state
 
     def ode(self, x_compressed: chex.Array, u: chex.Array) -> chex.Array:
@@ -130,6 +138,20 @@ class PendulumEnv(Env):
     @property
     def action_size(self) -> int:
         return 1
+    
+    @property
+    def max_speed(self) -> float:
+        return self.dynamics_params.max_speed
 
     def backend(self) -> str:
         return 'positional'
+
+
+if __name__ == "__main__":
+    env = PendulumEnv(initial_angle=jnp.pi)
+    initial_state = env.reset(jax.numpy.zeros(0))
+    initial_action = jax.numpy.ones(env.action_size)
+    next_state = env.step(initial_state, initial_action)
+
+    for ii in range(10):
+        next_state = env.step(next_state, initial_action)
