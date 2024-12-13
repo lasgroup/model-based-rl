@@ -28,7 +28,7 @@ class PendulumRewardParams:
 
 
 class PendulumEnv(Env):
-    def __init__(self, 
+    def __init__(self,
                  reward_source: str = 'gym',
                  margin_factor: float = 10.0,
                  initial_angle: float = jnp.pi
