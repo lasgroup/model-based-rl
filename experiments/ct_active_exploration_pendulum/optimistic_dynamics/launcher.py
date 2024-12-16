@@ -1,22 +1,22 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_CT_Pendulum_Dec09_18_00_MoreOnlineSamples'
+PROJECT_NAME = 'Active_CT_Pendulum_Dec09_18_00_XY'
+ENTITY = 'kiten'
 
 general_configs = {
     'seed': list(range(5)),
     'project_name': [PROJECT_NAME],
+    'entity': [ENTITY],
+    'optimizer': ['icem'],
     'num_offline_samples': [0],
-    'optimizer_horizon': [20],
-    'num_online_samples': [300],
+    'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
-    'icem_num_steps': [10],
-    'icem_colored_noise_exponent': [1.0],
     'reward_source': ['dm-control','gym'],
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['optimistic','pets'],
+    'exploration': ['optimistic','mean','pets'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
@@ -24,10 +24,20 @@ general_configs = {
     # 'eval_envs': [['swing-up','balance']], # bugged on EULER
 }
 
+sac_configs = {
+    'train_steps_sac': [100_000],
+} | general_configs if 'sac' in general_configs['optimizer'] else None
+
+icem_configs = {
+    'optimizer_horizon': [20],
+    'icem_num_steps': [10],
+    'icem_colored_noise_exponent': [1.0],
+} | general_configs if 'icem' in general_configs['optimizer'] else None
+
 
 def main():
     command_list = []
-    flags_combinations = dict_permutations(general_configs)
+    flags_combinations = dict_permutations(sac_configs) + dict_permutations(icem_configs)
     for flags in flags_combinations:
         cmd = generate_base_command(exp, flags=flags)
         command_list.append(cmd)

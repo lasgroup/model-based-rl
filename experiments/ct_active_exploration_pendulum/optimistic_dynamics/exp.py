@@ -1,29 +1,29 @@
 import argparse
-ENTITY = 'kiten'
-
 
 def experiment(
         seed: int = 0,
         project_name: str = 'CT_Active_Exploration',
-        num_offline_samples: int = 200,
-        optimizer_horizon: int = 100,
-        num_online_samples: int = 200,
+        entity: str = None,
+        num_offline_samples: int = 100,
+        num_online_samples: int = 100,
         deterministic_policy_for_data_collection: bool = False,
         noise_level: list = [0.1, 0.1], # TODO: This is from Chris
-        icem_num_steps: int = 10,
-        icem_colored_noise_exponent: float = 3.0,
-        reward_source = 'dm-control',
-        num_episodes: int = 20,
+        reward_source: str = 'dm-control',
+        num_episodes: int = 5,
         bnn_steps: int = 5_000,
         first_episode_for_policy_training: int = -1,
-        exploration: str = 'optimistic',  # Should be one of the ['optimistic', 'pets', 'mean'],
-        reset_statistical_model: bool = True,
+        exploration: str = 'optimistic',
+        reset_statistical_model: bool = False,
         regression_model: str = 'probabilistic_ensemble',
         beta: float = 2.0,
         env_name: str = 'swing-up',
-        eval_env_names: list[str] = ['swing-up']
+        eval_env_names: list[str] = ['swing-up'],
+        optimizer: str = 'icem',
+        train_steps_sac: int = 500,
+        optimizer_horizon: int = 100,
+        icem_num_steps: int = 10,
+        icem_colored_noise_exponent: float = 3.0
 ):
-    
     import chex
     import jax
     import jax.numpy as jnp
@@ -35,27 +35,27 @@ def experiment(
     from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
     from distrax import Normal
     from jax.nn import swish
-    from mbpo.optimizers import iCemParams, iCEMOptimizer
+    from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from mbrl.model_based_agent.continuous_active_exploration_model_based_agents import\
-         ContinuousOptimisticActiveExplorationModelBasedAgent, ContinuousPetsActiveExplorationModelBasedAgent
+         ContinuousOptimisticActiveExplorationModelBasedAgent, ContinuousPetsActiveExplorationModelBasedAgent,\
+         ContinuousMeanActiveExplorationModelBasedAgent
     from mbrl.utils.offline_data import PendulumOfflineData
-    
+
     log_wandb = True
     # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
-    config = dict(num_offline_samples=num_offline_samples,
-                  optimizer_horizon=optimizer_horizon,
+    general_config = dict(num_offline_samples=num_offline_samples,
                   num_online_samples=num_online_samples,
+                  num_offline_samples=num_offline_samples,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   noise_level=noise_level,
                   seed=seed,
                   reward_source=reward_source,
                   num_episodes=num_episodes,
-                  icem_num_steps=icem_num_steps,
                   bnn_steps=bnn_steps,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
@@ -65,6 +65,19 @@ def experiment(
                   env=env_name,
                   eval_env=eval_env_names
                   )
+    
+    if optimizer == 'sac':
+        config = general_config | dict(
+            optimizer='sac',
+            train_steps_sac=train_steps_sac
+        )
+    elif optimizer=='icem':
+        config = general_config | dict(
+            optimizer='icem',
+            optimizer_horizon=optimizer_horizon,
+            icem_num_steps=icem_num_steps,
+            icem_colored_noise_exponent=icem_colored_noise_exponent
+        )
 
     swing_up_env = ContinuousPendulumEnv(reward_source=reward_source)
     swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
@@ -77,6 +90,7 @@ def experiment(
         'swing-down': swing_down_env,
         'balance': balance_env
     }
+
     class PendulumReward(Reward):
         def __init__(self, reward_env: ContinuousPendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
@@ -101,7 +115,7 @@ def experiment(
                 reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
                                                             0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             else:
-                NotImplementedError()
+                raise ValueError(f"Invalid reward source: {self.reward_source}. Expected 'gym' or 'dm-control'.")            
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
@@ -123,7 +137,6 @@ def experiment(
     env = env_mapping.get(env_name, None)
     eval_envs = [env_mapping[name] for name in eval_env_names]
     reward_model_list = [reward_model_mapping[name] for name in eval_env_names]
-    
 
     offline_data_gen = PendulumOfflineData()
     key = jr.PRNGKey(seed)
@@ -166,8 +179,9 @@ def experiment(
             train_share=0.8,
             eval_frequency=5_000,
         )
+    else:
+        raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble' or 'deterministic_ensemble'.")
 
-    max_replay_size_true_data_buffer = 10 ** 4
 
     extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (swing_up_env.observation_size, 1, 1)
@@ -181,18 +195,62 @@ def experiment(
                               next_observation=jnp.ones(swing_up_env.observation_size),
                               extras={'state_extras': state_extras})
 
-    opt_params = iCemParams(
-        num_steps=icem_num_steps,
-        exponent=icem_colored_noise_exponent,
-        )
-    
-    optimizer = iCEMOptimizer(horizon=optimizer_horizon,
-                              key = jr.PRNGKey(seed),
-                              opt_params=opt_params,
-                              )
+    if optimizer == 'sac':
+        sac_kwargs = {
+            'num_timesteps': train_steps_sac,
+            'episode_length': num_online_samples,
+            'num_env_steps_between_updates': 20,
+            'num_envs': 64,
+            'num_eval_envs': 4,
+            'lr_alpha': 3e-4,
+            'lr_policy': 3e-4,
+            'lr_q': 3e-4,
+            'wd_alpha': 0.,
+            'wd_policy': 0.,
+            'wd_q': 0.,
+            'max_grad_norm': 1e5,
+            'discounting': 0.99,
+            'batch_size': 32,
+            'num_evals': 20,
+            'normalize_observations': True,
+            'reward_scaling': 1.,
+            'tau': 0.005,
+            'min_replay_size': 10 ** 4,
+            'max_replay_size': train_steps_sac,
+            'grad_updates_per_step': 20 * 32,  # should be num_envs * num_env_steps_between_updates
+            'deterministic_eval': True,
+            'init_log_alpha': 0.,
+            'policy_hidden_layer_sizes': (32,) * 5,
+            'policy_activation': swish,
+            'critic_hidden_layer_sizes': (128,) * 4,
+            'critic_activation': swish,
+            'wandb_logging': log_wandb,
+            'return_best_model': True,
+            }
+        max_replay_size_true_data_buffer = 10 ** 4
+
+        sac_buffer = UniformSamplingQueue(
+            max_replay_size=max_replay_size_true_data_buffer,
+            dummy_data_sample=dummy_sample,
+            sample_batch_size=1)
+
+        optimizer = SACOptimizer(system=None,
+                                 true_buffer=sac_buffer,
+                                 **sac_kwargs)
+        
+    elif optimizer == 'icem':
+        opt_params = iCemParams(
+            num_steps=icem_num_steps,
+            exponent=icem_colored_noise_exponent,
+            )
+
+        optimizer = iCEMOptimizer(horizon=optimizer_horizon,
+                                  key = jr.PRNGKey(seed),
+                                  opt_params=opt_params,
+                                  )
 
     wandb.init(project=project_name,
-               dir='/cluster/scratch/' + ENTITY,
+               dir='/cluster/scratch/' + entity,
                config=config
                )
 
@@ -201,6 +259,10 @@ def experiment(
         agent_class = ContinuousOptimisticActiveExplorationModelBasedAgent
     elif exploration == 'pets':
         agent_class = ContinuousPetsActiveExplorationModelBasedAgent
+    elif exploration == 'mean':
+        agent_class = ContinuousMeanActiveExplorationModelBasedAgent
+    else:
+        raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
     agent = agent_class(
         env=env,
@@ -232,13 +294,11 @@ def main(args):
     experiment(
         seed=args.seed,
         project_name=args.project_name,
+        entity=args.entity,
         num_offline_samples=args.num_offline_samples,
-        optimizer_horizon=args.optimizer_horizon,
         num_online_samples=args.num_online_samples,
         deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
         noise_level=args.noise_level,
-        icem_num_steps=args.icem_num_steps,
-        icem_colored_noise_exponent=args.icem_colored_noise_exponent,
         reward_source=args.reward_source,
         num_episodes=args.num_episodes,
         bnn_steps=args.bnn_steps,
@@ -248,20 +308,25 @@ def main(args):
         regression_model=args.regression_model,
         beta=args.beta,
         env_name=args.env,
-        eval_env_names=args.eval_envs
+        eval_env_names=args.eval_envs,
+        optimizer=args.optimizer,
+        train_steps_sac=args.train_steps_sac,
+        optimizer_horizon=args.optimizer_horizon,
+        icem_num_steps=args.icem_num_steps,
+        icem_colored_noise_exponent=args.icem_colored_noise_exponent
     )
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='CT_Optimistic_Active_Exploration')
+    parser.add_argument('--project_name', type=str, default='CT_Active_Exploration')
+    parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=200)
-    parser.add_argument('--optimizer_horizon', type=int, default=100)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
-    parser.add_argument('--icem_num_steps', type=int, default=10)
-    parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
     parser.add_argument('--reward_source', type=str, default='dm-control')
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5000)
@@ -272,5 +337,13 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 
+
+    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
+    parser.add_argument('--train_steps_sac', type=int, default=50_000)
+    parser.add_argument('--optimizer_horizon', type=int, default=100)
+    parser.add_argument('--icem_num_steps', type=int, default=10)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+
+
     args = parser.parse_args()
     main(args)

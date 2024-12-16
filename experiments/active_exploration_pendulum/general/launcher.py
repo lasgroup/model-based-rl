@@ -8,8 +8,9 @@ general_configs = {
     'seed': list(range(1)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
+    'optimizer': ['sac', 'icem'],
     'num_offline_samples': [0],
-    'num_online_samples': [100],
+    'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'num_episodes': [10],
@@ -21,19 +22,18 @@ general_configs = {
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'env': ['balance'],
+    # 'eval_envs': [['swing-up','balance']], # bugged on EULER
 }
 
 sac_configs = {
-    'optimizer': ['sac'],
     'train_steps_sac': [100_000],
-} | general_configs
+} | general_configs if 'sac' in general_configs['optimizer'] else None
 
 icem_configs = {
-    'optimizer': ['icem'],
     'optimizer_horizon': [20],
     'icem_num_steps': [10],
     'icem_colored_noise_exponent': [1.0],
-} | general_configs
+} | general_configs if 'icem' in general_configs['optimizer'] else None
 
 
 def main():

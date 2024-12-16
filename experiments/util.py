@@ -192,7 +192,12 @@ def generate_run_commands(command_list: List[str],
 """ Some aggregation functions """
 
 
-def dict_permutations(d: dict) -> List[dict]:
+def dict_permutations(d: Optional[dict]) -> List[Dict]:
+    if not d:
+        return []
+    if not isinstance(d, dict):
+        raise ValueError("Input must be a dictionary.")
+    
     keys = d.keys()
     values = d.values()
     perms = []
@@ -212,6 +217,16 @@ if __name__ == '__main__':
         "C": ["!", "@"]
     }
 
-    result = dict_permutations(d)
+    result = dict_permutations(d) + dict_permutations(None) + dict_permutations({})
     for r in result:
         print(r)
+
+    try:
+        print(dict_permutations(123))
+    except ValueError as e:
+        print(f"Error: {e}")
+
+    try:
+        print(dict_permutations("not_a_dict"))
+    except ValueError as e:
+        print(f"Error: {e}")
