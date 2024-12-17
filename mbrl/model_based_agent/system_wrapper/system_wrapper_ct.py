@@ -132,7 +132,7 @@ class ContinuousMeanDynamics(ContinuousPetsDynamics, Generic[ModelState]):
         return Normal(loc=x_next, scale=aleatoric_std), new_dynamics_params
 
 
-class ContinuousExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
+class ContinuousPetsExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState]):
     def __init__(self, use_log: bool = True, scale_with_aleatoric_std: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_log = use_log
@@ -183,7 +183,7 @@ class ContinuousExplorationDynamics(ContinuousPetsDynamics, Generic[ModelState])
         return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
 
 
-class ContinuousOptimisticExplorationDynamics(ContinuousExplorationDynamics, Generic[ModelState]):
+class ContinuousOptimisticExplorationDynamics(ContinuousPetsExplorationDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.u_dim = self.x_dim + self.u_dim
@@ -207,6 +207,40 @@ class ContinuousOptimisticExplorationDynamics(ContinuousExplorationDynamics, Gen
         aleatoric_std = model_output.aleatoric_std # TODO: dt?
         intrinsic_reward = self.get_intrinsic_reward(model_output.epistemic_std, aleatoric_std)
         intrinsic_reward = jnp.atleast_1d(intrinsic_reward)
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        aleatoric_std = model_output.aleatoric_std * self.dt # TODO
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        # add intrinsic reward to the next state
+        x_next_with_reward = jnp.concatenate([x_next, intrinsic_reward], axis=-1)
+        aleatoric_std_with_reward = jnp.concatenate([aleatoric_std, jnp.zeros_like(intrinsic_reward)], axis=-1)
+        return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
+
+
+class ContinuousMeanExplorationDynamics(ContinuousPetsExplorationDynamics, Generic[ModelState]):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.u_dim = self.x_dim + self.u_dim
+    
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        z = jnp.concatenate([x, u])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        dx_next = model_output.mean
+        x_next = x + dx_next * self.dt
+
+        epistemic_std = model_output.epistemic_std
+        aleatoric_std = model_output.aleatoric_std # TODO * self.dt?
+        intrinsic_reward = self.get_intrinsic_reward(epistemic_std, aleatoric_std)
+        intrinsic_reward = jnp.atleast_1d(intrinsic_reward)
+
+        # Concatenate state and last num_frame_stack actions
         new_dynamics_params = dynamics_params.replace(key=next_key,
                                                       statistical_model_state=model_output.statistical_model_state)
         aleatoric_std = model_output.aleatoric_std * self.dt # TODO
@@ -327,8 +361,8 @@ class ContinuousExplorationReward(Reward, ExplorationRewardParams):
         return ExplorationRewardParams()
 
 
-class ContinuousExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
-    def __init__(self, dynamics: ContinuousExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
+class ContinuousPetsExplorationSystem(ContinuousPetsSystem, Generic[ModelState, RewardParams]):
+    def __init__(self, dynamics: ContinuousPetsExplorationDynamics[ModelState], reward: Reward[RewardParams] | None = None):
         if reward is None:
             # TODO: evtl pass control cost here. Currently zero.
             reward = ContinuousExplorationReward(x_dim=dynamics.x_dim, u_dim=dynamics.u_dim)
@@ -371,7 +405,7 @@ class ContinuousExplorationSystem(ContinuousPetsSystem, Generic[ModelState, Rewa
         return new_system_state
 
 
-class ContinuousOptimisticExplorationSystem(ContinuousExplorationSystem, Generic[ModelState, RewardParams]):
+class ContinuousOptimisticExplorationSystem(ContinuousPetsExplorationSystem, Generic[ModelState, RewardParams]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -393,3 +427,7 @@ class ContinuousOptimisticExplorationSystem(ContinuousExplorationSystem, Generic
             reward_dist, new_reward_params = self.reward(x, u[:self.u_dim - self.x_dim], reward_params, x_next[:-1])
         reward = reward_dist.sample(seed=key)
         return reward, new_reward_params
+
+
+class ContinuousMeanExplorationSystem(ContinuousPetsExplorationSystem, Generic[ModelState, RewardParams]):
+    pass

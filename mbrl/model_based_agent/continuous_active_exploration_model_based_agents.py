@@ -3,9 +3,10 @@ from .continuous_base_model_based_agent import ContinuousBaseModelBasedAgent
 from mbpo.systems.rewards.base_rewards import Reward
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.optimizers.policy_optimizers.brax_optimizers import BraxOptimizer
-from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor
+from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor, MeanActor
 from mbrl.model_based_agent.system_wrapper import ContinuousOptimisticExplorationSystem, ContinuousOptimisticExplorationDynamics, \
-    ContinuousExplorationReward, ContinuousPetsSystem, ContinuousPetsDynamics, ContinuousExplorationDynamics, ContinuousExplorationSystem
+    ContinuousExplorationReward, ContinuousPetsSystem, ContinuousPetsDynamics, ContinuousPetsExplorationDynamics, ContinuousPetsExplorationSystem, \
+    ContinuousMeanExplorationDynamics, ContinuousMeanExplorationSystem
 from mbpo.utils.type_aliases import OptimizerState
 import chex
 import jax.random as jr
@@ -43,7 +44,7 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = ContinuousExplorationDynamics, ContinuousExplorationSystem, PetsActor
+        dynamics, system, actor = ContinuousPetsExplorationDynamics, ContinuousPetsExplorationSystem, PetsActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
@@ -206,6 +207,27 @@ class ContinuousOptimisticActiveExplorationModelBasedAgent(ContinuousPetsActiveE
                       optimizer: BaseOptimizer,
                       ) -> Actor:
         dynamics, system, actor = ContinuousOptimisticExplorationDynamics, ContinuousOptimisticExplorationSystem, OptimisticActor
+        dynamics = dynamics(statistical_model=self.statistical_model,
+                            x_dim=self.env.observation_size,
+                            u_dim=self.env.action_size,
+                            predict_difference=self.predict_difference)
+        system = system(dynamics=dynamics,
+                        reward=self.reward_model, )
+        actor = actor(env_observation_size=self.env.observation_size,
+                      env_action_size=self.env.action_size,
+                      optimizer=optimizer)
+        actor.set_system(system=system)
+        return actor
+
+
+class ContinuousMeanActiveExplorationModelBasedAgent(ContinuousPetsActiveExplorationModelBasedAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def prepare_actor(self,
+                      optimizer: BaseOptimizer,
+                      ) -> Actor:
+        dynamics, system, actor = ContinuousMeanExplorationDynamics, ContinuousMeanExplorationSystem, MeanActor
         dynamics = dynamics(statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
