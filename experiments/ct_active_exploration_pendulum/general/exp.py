@@ -157,7 +157,7 @@ def experiment(
             features=(256,) * 2,
             bnn_type=ProbabilisticEnsemble,
             num_particles=10,
-            logging_wandb=log_wandb,
+            logging_wandb=False, # TODO
             return_best_model=True,
             eval_batch_size=64,
             train_share=0.8,
@@ -223,7 +223,7 @@ def experiment(
             'policy_activation': swish,
             'critic_hidden_layer_sizes': (128,) * 4,
             'critic_activation': swish,
-            'wandb_logging': log_wandb,
+            'wandb_logging': False,
             'return_best_model': True,
             }
         max_replay_size_true_data_buffer = 10 ** 4
