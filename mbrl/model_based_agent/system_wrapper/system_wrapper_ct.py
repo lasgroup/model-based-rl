@@ -221,7 +221,6 @@ class ContinuousOptimisticExplorationDynamics(ContinuousPetsExplorationDynamics,
 class ContinuousMeanExplorationDynamics(ContinuousPetsExplorationDynamics, Generic[ModelState]):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.u_dim = self.x_dim + self.u_dim
     
     def next_state(self,
                    x: chex.Array,
