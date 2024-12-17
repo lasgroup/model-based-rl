@@ -18,7 +18,6 @@ def experiment(
         regression_model: str = 'probabilistic_ensemble',
         beta: float = 2.0,
         weight_decay: float = 0.0,
-
         env_name: str = 'swing-up',
         eval_env_name: str = 'swing-up',
         optimizer: str = 'icem',
@@ -96,19 +95,14 @@ def experiment(
     swing_down_env.reward_params = swing_down_params
     balance_env = ContinuousPendulumEnv(reward_source=reward_source, initial_angle=0.)
 
-    if env_name == 'swing_up':
-        env = swing_up_env
-    elif env_name == 'balance':
-        env = balance_env
-    else:
-        env = swing_up_env
+    env_mapping = {
+        'swing-up': swing_up_env,
+        'swing-down': swing_down_env,
+        'balance': balance_env
+    }
 
-    if eval_env_name == 'swing_up':
-        eval_env = swing_up_env
-    elif eval_env_name == 'balance':
-        eval_env = balance_env 
-    else:
-        eval_env = swing_up_env
+    env = env_mapping.get(env_name, None)
+    eval_env = env_mapping.get(eval_env_name, None)
 
     # adjust control cost
     control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
@@ -363,7 +357,6 @@ def main(args):
                noise_level=args.noise_level,
                reward_source=args.reward_source,
                control_cost=args.control_cost,
-
                num_episodes=args.num_episodes,
                bnn_steps=args.bnn_steps,
                first_episode_for_policy_training=args.first_episode_for_policy_training,
