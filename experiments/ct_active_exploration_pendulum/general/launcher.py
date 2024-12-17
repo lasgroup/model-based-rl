@@ -24,15 +24,27 @@ general_configs = {
     # 'eval_envs': [['swing-up','balance']], # bugged on EULER
 }
 
-sac_configs = {
-    'train_steps_sac': [100_000],
-} | general_configs if 'sac' in general_configs['optimizer'] else None
+sac_configs = (
+    {
+        **general_configs,
+        'optimizer': ['sac'],
+        'train_steps_sac': [100_000],
+    }
+    if 'sac' in general_configs['optimizer']
+    else None
+)
 
-icem_configs = {
-    'optimizer_horizon': [20],
-    'icem_num_steps': [10],
-    'icem_colored_noise_exponent': [1.0],
-} | general_configs if 'icem' in general_configs['optimizer'] else None
+icem_configs = (
+    {
+        **general_configs,
+        'optimizer': ['icem'],
+        'optimizer_horizon': [20],
+        'icem_num_steps': [10],
+        'icem_colored_noise_exponent': [1.0],
+    }
+    if 'icem' in general_configs['optimizer']
+    else None
+)
 
 
 def main():

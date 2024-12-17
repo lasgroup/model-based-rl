@@ -55,7 +55,6 @@ def experiment(
 
     general_config = dict(num_offline_samples=num_offline_samples,
                   num_online_samples=num_online_samples,
-                  num_offline_samples=num_offline_samples,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   noise_level=noise_level,
                   seed=seed,
@@ -315,7 +314,6 @@ def main(args):
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                noise_level=args.noise_level,
                reward_source=args.reward_source,
-               control_cost=args.control_cost,
                num_episodes=args.num_episodes,
                bnn_steps=args.bnn_steps,
                predict_difference=args.predict_difference,
@@ -326,7 +324,7 @@ def main(args):
                beta=args.beta,
                weight_decay=args.weight_decay,
                env_name=args.env,
-               eval_env_names=args.eval_envs,
+               eval_env_name=args.eval_env,
                optimizer=args.optimizer,
                train_steps_sac=args.train_steps_sac,
                optimizer_horizon=args.optimizer_horizon,
@@ -345,7 +343,6 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
     parser.add_argument('--reward_source', type=str, default='dm-control')
-    parser.add_argument('--control_cost', type=float, default=0.02)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--predict_difference', type=int, default=-1)
@@ -357,7 +354,6 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
-
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
     parser.add_argument('--optimizer_horizon', type=int, default=100)

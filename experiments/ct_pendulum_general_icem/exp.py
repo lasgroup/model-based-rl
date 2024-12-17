@@ -58,7 +58,6 @@ def experiment(
 
     general_config = dict(num_offline_samples=num_offline_samples,
                   num_online_samples=num_online_samples,
-                  num_offline_samples=num_offline_samples,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   noise_level=noise_level,
                   seed=seed,
@@ -366,7 +365,7 @@ def main(args):
                beta=args.beta,
                weight_decay=args.weight_decay,
                env_name=args.env,
-               eval_env_names=args.eval_envs,
+               eval_env_name=args.eval_env,
                optimizer=args.optimizer,
                train_steps_sac=args.train_steps_sac,
                optimizer_horizon=args.optimizer_horizon,
@@ -395,7 +394,6 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
-
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
     parser.add_argument('--optimizer_horizon', type=int, default=100)

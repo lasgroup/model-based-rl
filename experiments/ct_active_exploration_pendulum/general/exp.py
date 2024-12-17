@@ -50,7 +50,6 @@ def experiment(
 
     general_config = dict(num_offline_samples=num_offline_samples,
                   num_online_samples=num_online_samples,
-                  num_offline_samples=num_offline_samples,
                   deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
                   noise_level=noise_level,
                   seed=seed,
