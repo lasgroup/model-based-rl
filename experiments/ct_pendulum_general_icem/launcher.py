@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Dec16_17_00_Test1'
+PROJECT_NAME = 'CT_PendulumGeneral_Dec30_17_00_Test_Mean_GP'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -12,18 +12,18 @@ general_configs = {
     'num_offline_samples': [0],
     'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
-    'reward_source': ['dm-control','gym'],
+    'reward_source': ['gym'],
     'control_cost': [0.02],
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','mean','pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble'],
+    'regression_model': ['probabilistic_ensemble','GP'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'env': ['swing-up','balance'],
-    'eval_env': ['swing-up','balance'],
+    'eval_env': ['swing-up'],
 }
 
 sac_configs = (
