@@ -36,7 +36,7 @@ class ContinuousMeanModelBasedAgent(ContinuousBaseModelBasedAgent):
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
                             predict_difference=self.predict_difference,
-                            dt=self.dynamics_dt)
+                            dt=self.dt) # self.dynamics_dt
         system = system(dynamics=dynamics,
                         reward=self.reward_model, )
         actor = actor(env_observation_size=self.env.observation_size,
