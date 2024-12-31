@@ -1,14 +1,14 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_DT_Pendulum_Dec12_15_00_TestOptimisticMeanPets'
+PROJECT_NAME = 'Active_DT_Pendulum_Dec31_19_55_Test_Mean_GP'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(1)),
+    'seed': list(range(3)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
-    'optimizer': ['sac', 'icem'],
+    'optimizer': ['icem'],
     'num_offline_samples': [0],
     'num_online_samples': [200],
     'deterministic_policy_for_data_collection': [0],
@@ -19,7 +19,7 @@ general_configs = {
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','mean','pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble'],
+    'regression_model': ['GP'],
     'beta': [2.0],
     'env': ['balance'],
     # 'eval_envs': [['swing-up','balance']], # bugged on EULER
@@ -60,7 +60,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='3:59:00',
+                          duration='23:59:00',
                           prompt=True,
                           mem=16000)
 

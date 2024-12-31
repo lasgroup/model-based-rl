@@ -33,6 +33,7 @@ def experiment(
     from brax.training.types import Transition
     from bsm.bayesian_regression import ProbabilisticEnsemble, DeterministicFSVGDEnsemble, ProbabilisticFSVGDEnsemble
     from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
     from distrax import Normal
     from jax.nn import swish
     from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
@@ -178,8 +179,17 @@ def experiment(
             train_share=0.8,
             eval_frequency=5_000,
         )
+    elif regression_model == 'GP':
+        model = GPStatisticalModel(
+            input_dim=env.observation_size + env.action_size,
+            output_dim=env.observation_size,
+            output_stds=1e-3 * jnp.ones(env.observation_size),
+            f_norm_bound=1.0,
+            delta=0.1,
+            num_training_steps=1000,
+        )
     else:
-        raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble' or 'deterministic_ensemble'.")
+        raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble' or 'deterministic_ensemble' or 'GP'.")
 
 
     extra_fields = ('derivative', 't', 'dt')
