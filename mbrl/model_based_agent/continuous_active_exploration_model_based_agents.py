@@ -167,6 +167,30 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
                                                                   agent_state=agent_state,
                                                                   episode_idx=episode_idx,
                                                                   )
+            
+            # Log epistemic uncertainty
+            statistical_model_state = agent_state.optimizer_state.system_params.dynamics_params.statistical_model_state # obviously bizarre, fix
+            output = self.statistical_model.predict_batch(self.states, statistical_model_state=statistical_model_state)
+            epistemic_magnitude = jnp.sqrt(jnp.sum(output.epistemic_std**2, axis=1))
+            augmented_epistemic_std = jnp.hstack([output.epistemic_std, epistemic_magnitude[:, None]])
+
+            ep_uncert_metrics = {}
+            for prefix, fn in [('mean', jnp.mean),('max', jnp.max),('min', jnp.min)]:
+                ep_uncert_metrics.update(
+                    {
+                        f'{prefix}_ep_uncert/episode_uncert_dim_{dim}': (
+                            value
+                        )
+                        for dim, value in enumerate(fn(augmented_epistemic_std, axis=0))
+                    }
+                )
+            
+            if self.log_to_wandb:
+                wandb.log(ep_uncert_metrics | {'episode_idx': episode_idx})
+            else:
+                print(ep_uncert_metrics)
+            ## Until here
+
             for i in range(self.num_rewards):
                 env_interactor = self.env_interactors[i]
                 actor, opt_state = actors_for_reward_models[i]
@@ -188,6 +212,14 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
             Tuple[ModelBasedAgentState, List[Tuple[Actor, OptimizerState]]]:
         if start_from_scratch:
             # If we start collecting the data and need to initialize the agent state
+            key, subkey = jr.split(key)
+
+            num_tests = 100_000
+            self.states = jr.uniform(key=subkey, shape=(num_tests, 3,), minval=jnp.array([0.,-1,-1]), maxval=jnp.array([2*jnp.pi,1,1]))
+            self.states = jnp.stack([jnp.cos(self.states[:,0]), 
+                                     jnp.sin(self.states[:,0]), 
+                                     self.env.dynamics_params.max_speed*self.states[:,1],
+                                     self.env.dynamics_params.max_torque*self.states[:,2]], axis=-1)
             agent_state = self.init(key)
             actors_for_reward_models = self.actors_and_opt_states
         for episode_idx in range(num_episodes):

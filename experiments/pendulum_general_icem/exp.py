@@ -336,7 +336,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='ICEM_CT_Pendulum')
+    parser.add_argument('--project_name', type=str, default='ICEM_DT_Pendulum')
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
@@ -354,7 +354,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
-    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
+    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='sac')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
     parser.add_argument('--optimizer_horizon', type=int, default=100)
     parser.add_argument('--icem_num_steps', type=int, default=10)

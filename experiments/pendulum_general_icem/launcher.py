@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_PendulumGeneral_iCEM_Dec30_17_00_Test_Mean_GP'
+PROJECT_NAME = 'DT_PendulumGeneral_Jan06_23_55_Test_Uncertainty_reduction'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -19,7 +19,7 @@ general_configs = {
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','mean','pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble','GP'],
+    'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'env': ['swing-up','balance'],

@@ -1,11 +1,11 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'Active_CT_Pendulum_Dec31_19_55_Test_Mean_GP'
+PROJECT_NAME = 'Active_CT_Pendulum_Jan06_23_55_Test_Uncertainty_reduction'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(5)),
+    'seed': list(range(3)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -18,7 +18,7 @@ general_configs = {
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic','mean','pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['GP'],
+    'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'env': ['swing-up','balance'],
     # 'eval_envs': [['swing-up','balance']], # bugged on EULER
