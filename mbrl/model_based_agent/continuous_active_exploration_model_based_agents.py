@@ -10,6 +10,7 @@ from mbrl.model_based_agent.system_wrapper import ContinuousOptimisticExploratio
 from mbpo.utils.type_aliases import OptimizerState
 import chex
 import jax.random as jr
+import jax.numpy as jnp
 from typing import List, Tuple
 import wandb
 from brax.envs import Env as BraxEnv
