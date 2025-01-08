@@ -332,7 +332,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--project_name', type=str, default='CT_Active_Exploration')
     parser.add_argument('--entity', type=str, default='kiten')
-    parser.add_argument('--num_offline_samples', type=int, default=200)
+    parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])

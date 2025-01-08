@@ -42,14 +42,14 @@ def experiment(
     from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
-    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
+    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent, ContinuousRandomModelBasedAgent
 
     log_wandb = True
     # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
-    assert exploration in ['optimistic', 'mean',
-                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+    assert exploration in ['optimistic', 'mean', 'random',
+                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'or ''random"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
     assert env_name in ['swing-up', 'balance']
@@ -284,6 +284,8 @@ def experiment(
         agent_class = ContinuousPETSModelBasedAgent
     elif exploration == 'mean':
         agent_class = ContinuousMeanModelBasedAgent
+    elif exploration == 'random':
+        agent_class = ContinuousRandomModelBasedAgent
     else:
         raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
@@ -387,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean'], default='mean')
+    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'random'], default='random')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)

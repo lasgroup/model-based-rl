@@ -5,7 +5,7 @@ PROJECT_NAME = 'Active_CT_Pendulum_Jan06_23_55_Test_Uncertainty_reduction'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(3)),
+    'seed': list(range(15)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -20,7 +20,7 @@ general_configs = {
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
-    'env': ['swing-up','balance'],
+    'env': ['balance'],
     # 'eval_envs': [['swing-up','balance']], # bugged on EULER
 }
 

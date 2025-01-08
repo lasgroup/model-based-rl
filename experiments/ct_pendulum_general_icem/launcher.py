@@ -5,7 +5,7 @@ PROJECT_NAME = 'CT_PendulumGeneral_Jan06_23_55_Test_Uncertainty_reduction'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(3)),
+    'seed': list(range(15)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -17,13 +17,13 @@ general_configs = {
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['optimistic','mean','pets'],
+    'exploration': ['optimistic','mean','pets','random'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
-    'env': ['swing-up','balance'],
-    'eval_env': ['swing-up'],
+    'env': ['balance'],
+    'eval_env': ['balance'],
 }
 
 sac_configs = (
