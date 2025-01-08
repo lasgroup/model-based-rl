@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Jan06_23_55_Test_Uncertainty_reduction'
+PROJECT_NAME = 'CT_PendulumGeneral_Jan07_23_55_Test2_Uncertainty_reduction'
 ENTITY = 'kiten'
 
 general_configs = {
