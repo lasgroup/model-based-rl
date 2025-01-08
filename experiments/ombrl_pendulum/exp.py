@@ -1,21 +1,5 @@
 import argparse
 
-import chex
-import jax.numpy as jnp
-import jax.random as jr
-import optax
-import wandb
-from distrax import Normal
-from mbpo.systems.rewards.base_rewards import Reward, RewardParams
-from mbpo.optimizers import iCEMOptimizer, iCemParams
-from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
-from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
-from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
-from mbrl.envs.pendulum import PendulumEnv
-from optax.schedules import linear_schedule
-from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
-
-
 def experiment(project_name: str = 'GPUSpeedTest',
                seed: int = 42,
                num_offline_samples: int = 0,
@@ -44,6 +28,21 @@ def experiment(project_name: str = 'GPUSpeedTest',
                reward_source: str = 'gym',
                sample_with_eps_std: bool = False,
                ):
+    import chex
+    import jax.numpy as jnp
+    import jax.random as jr
+    import optax
+    import wandb
+    from distrax import Normal
+    from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+    from mbpo.optimizers import iCEMOptimizer, iCemParams
+    from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEnsemble
+    from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
+    from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
+    from mbrl.envs.pendulum import PendulumEnv
+    from optax.schedules import linear_schedule
+    from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
+    
     assert exploration in ['optimistic', 'pets',
                            'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
