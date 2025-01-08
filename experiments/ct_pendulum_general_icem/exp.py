@@ -24,7 +24,8 @@ def experiment(
         train_steps_sac: int = 500,
         optimizer_horizon: int = 100,
         icem_num_steps: int = 10,
-        icem_colored_noise_exponent: float = 3.0
+        icem_colored_noise_exponent: float = 3.0,
+        save_trajectory_transitions: bool = False
         ):
     
     import chex
@@ -72,7 +73,8 @@ def experiment(
                   beta=beta,
                   weight_decay=weight_decay,
                   env=env_name,
-                  eval_env=eval_env_name
+                  eval_env=eval_env_name,
+                  save_trajectory_transitions=save_trajectory_transitions
                   )
     
     if optimizer == 'sac':
@@ -336,6 +338,7 @@ def experiment(
         first_episode_for_policy_training=first_episode_for_policy_training,
         predict_difference=False,
         reset_statistical_model=reset_statistical_model,
+        save_trajectory_transitions=save_trajectory_transitions,
         dt=env.dt,
         state_extras_ref=state_extras,
     )
@@ -372,7 +375,8 @@ def main(args):
                train_steps_sac=args.train_steps_sac,
                optimizer_horizon=args.optimizer_horizon,
                icem_num_steps=args.icem_num_steps,
-               icem_colored_noise_exponent=args.icem_colored_noise_exponent
+               icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+               save_trajectory_transitions=bool(args.save_trajectory_transitions)
     )
 
 if __name__ == '__main__':
@@ -389,18 +393,19 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'random'], default='random')
+    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'random'], default='mean')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
-    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
+    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='sac')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
     parser.add_argument('--optimizer_horizon', type=int, default=100)
     parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+    parser.add_argument('--save_trajectory_transitions', type=int, default=False)
 
     args = parser.parse_args()
     main(args)

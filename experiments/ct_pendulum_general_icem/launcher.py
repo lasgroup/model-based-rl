@@ -1,11 +1,11 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Jan07_23_55_Test2_Uncertainty_reduction'
+PROJECT_NAME = 'CT_PendulumGeneral_Jan07_23_55_Test_Save_Trajectories'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(15)),
+    'seed': list(range(1)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -17,13 +17,14 @@ general_configs = {
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['optimistic','mean','pets','random'],
+    'exploration': ['mean','random'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'env': ['balance'],
     'eval_env': ['balance'],
+    'save_trajectory_transitions': [1],
 }
 
 sac_configs = (
