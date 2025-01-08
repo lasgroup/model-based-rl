@@ -41,7 +41,8 @@ class ContinuousPendulumEnv(Env):
     def __init__(self, reward_source: str = 'gym',
                  noise_level: chex.Array | None = None,
                  init_noise_key: chex.PRNGKey | None = None,
-                 initial_angle: float = jnp.pi):
+                 initial_angle: float = jnp.pi,
+                 seed: int = None):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
         bound = 0.1
@@ -57,6 +58,12 @@ class ContinuousPendulumEnv(Env):
                                                 value_at_margin=value_at_margin,
                                                 sigmoid='long_tail')
         self.initial_angle = initial_angle
+        if initial_angle == 0. and seed:
+            assert(seed is not None)
+            self.key = jr.key(seed)
+            self.initial_angle = jr.uniform(self.key, minval=-jnp.pi/90, maxval=jnp.pi/90)
+        print(f'Initial angle of environment set to {self.initial_angle}')
+
 
     def reset(self,
               rng: jax.Array | None = None) -> State:

@@ -94,7 +94,7 @@ def experiment(
     swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
     swing_down_env = ContinuousPendulumEnv(reward_source=reward_source)
     swing_down_env.reward_params = swing_down_params
-    balance_env = ContinuousPendulumEnv(reward_source=reward_source, initial_angle=0.)
+    balance_env = ContinuousPendulumEnv(reward_source=reward_source, initial_angle=0., seed=seed)
 
     env_mapping = {
         'swing-up': swing_up_env,
