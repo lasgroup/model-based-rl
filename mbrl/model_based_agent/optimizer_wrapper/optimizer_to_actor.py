@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 
 import chex
+import jax.random as jr
+
+from brax.envs import Env as BraxEnv
 from brax.training.replay_buffers import ReplayBufferState
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.systems.base_systems import System
@@ -73,6 +76,23 @@ class MeanActor(Actor):
             evaluate: bool = True
             ) -> Tuple[chex.Array, OptimizerState]:
         return self.optimizer.act(obs, opt_state, evaluate)
+    
+
+class RandomActor(Actor):
+    def __init__(self, env: BraxEnv, *args, **kwargs):
+        self.env = env
+        super().__init__(*args, **kwargs)
+
+    def act(self,
+            obs: chex.Array,
+            opt_state: OptimizerState[RewardParams, DynamicsParams],
+            evaluate: bool = True
+            ) -> Tuple[chex.Array, OptimizerState]:
+        _, subkey = jr.split(opt_state.key)
+        random_action = jr.uniform(subkey, (1, self.env_action_size),
+                                   minval=-self.env.dynamics_params.max_torque,
+                                   maxval=self.env.dynamics_params.max_torque)
+        return random_action, opt_state
 
 
 class OptimisticActor(Actor):
