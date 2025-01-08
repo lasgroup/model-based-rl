@@ -1,30 +1,30 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Jan07_23_55_Test_Save_Trajectories'
+PROJECT_NAME = 'CT_PendulumGeneral_Jan08_13_55_Test3_Uncertainty_reduction_LongerHorizon'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(1)),
+    'seed': list(range(10)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
     'num_offline_samples': [0],
-    'num_online_samples': [200],
+    'num_online_samples': [400],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'control_cost': [0.02],
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['mean','random'],
+    'exploration': ['mean'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'env': ['balance'],
     'eval_env': ['balance'],
-    'save_trajectory_transitions': [1],
+    'save_trajectory_transitions': [0],
 }
 
 sac_configs = (
