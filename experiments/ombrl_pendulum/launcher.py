@@ -4,7 +4,7 @@ from experiments.util import generate_run_commands, generate_base_command, dict_
 ENTITY = 'kiten'
 
 general_configs = {
-    'project_name': ['DT_OMBRL_Jan08_23_55_Test1'],
+    'project_name': ['DT_OMBRL_Jan0_17_15_Test2_gym'],
     'num_offline_samples': [0, ],
     'icem_horizon': [40, ],
     'num_particles': [10, ],
@@ -25,7 +25,9 @@ general_configs = {
     'log_wandb': [1],
     'entity': [ENTITY, ],
     'calibration': [1],
-    'reward_source': ['dm-control'],
+    'reward_source': ['gym'],
+    'env': ['swing-up','balance'],
+    'eval_env': ['swing-up','balance'],
 }
 
 pets_config = {

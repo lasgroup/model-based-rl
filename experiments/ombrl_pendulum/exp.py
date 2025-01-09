@@ -19,6 +19,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
                regression_model: str = 'probabilistic_ensemble',
                exploration_factor: float = 1.0,
                horizon: int = 100,
+               env_name: str = 'swing-up',
+               eval_env_name: str = 'swing-up',
                log_wandb: bool = False,
                entity: str = 'trevenl',
                int_rew_weight_init: float = 1.0,
@@ -41,14 +43,17 @@ def experiment(project_name: str = 'GPUSpeedTest',
     from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
     from mbrl.envs.pendulum import PendulumEnv
     from optax.schedules import linear_schedule
-    from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent
+    from mbrl.model_based_agent import OptimisticModelBasedAgent, PETSModelBasedAgent, MeanModelBasedAgent
     
     assert exploration in ['optimistic', 'pets',
-                           'hucrl'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+                           'hucrl', 'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
     if regression_model == 'GP':
         import jax
         jax.config.update("jax_enable_x64", True)
+    assert reward_source in ['dm-control', 'gym']
+    assert env_name in ['swing-up', 'balance']
+    assert eval_env_name in ['swing-up', 'balance']
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
                                                 transition_steps=linear_scheduler_steps)
@@ -77,18 +82,30 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   calibration=calibration,
                   sample_with_eps_std=sample_with_eps_std,
                   reward_source=reward_source,
-                  env_name='pendulum',
+                  env_name=env_name,
+                  eval_env_name=eval_env_name
                   )
 
     int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
                                         end_value=int_rew_weight_end,
                                         transition_steps=rew_decrease_steps)
 
-    env = PendulumEnv(reward_source=reward_source)
+    swing_up_env = PendulumEnv(reward_source=reward_source)
+    swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
+    swing_down_env = PendulumEnv(reward_source=reward_source)
+    swing_down_env.reward_params = swing_down_params
+    balance_env = PendulumEnv(reward_source=reward_source, initial_angle=0.)
+
+    env_mapping = {
+        'swing-up': swing_up_env,
+        'swing-down': swing_down_env,
+        'balance': balance_env
+    }
 
     class PendulumReward(Reward):
-        def __init__(self, reward_source: str = 'gym'):
+        def __init__(self, reward_env: PendulumEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
+            self.env = reward_env
             self.reward_source = reward_source
 
         def __call__(self,
@@ -99,21 +116,38 @@ def experiment(project_name: str = 'GPUSpeedTest',
                      ):
             assert x.shape == (3,) and u.shape == (1,)
             theta, omega = jnp.arctan2(x[1], x[0]), x[-1]
-            target_angle = env.reward_params.target_angle
+            target_angle = self.env.reward_params.target_angle
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
             if self.reward_source == 'gym':
-                reward = -(env.reward_params.angle_cost * diff_th ** 2 +
-                           0.1 * omega ** 2) - env.reward_params.control_cost * u ** 2
+                reward = -(self.env.reward_params.angle_cost * diff_th ** 2 +
+                           0.1 * omega ** 2) - self.env.reward_params.control_cost * u ** 2
+            elif self.reward_source == 'dm-control':
+                reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
+                                                            0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             else:
-                reward = env.tolerance_reward(jnp.sqrt(env.reward_params.angle_cost * diff_th ** 2 +
-                                                       0.1 * omega ** 2)) - env.reward_params.control_cost * u ** 2
+                raise ValueError(f"Invalid reward source: {self.reward_source}. Expected 'gym' or 'dm-control'.")            
             reward = reward.squeeze()
             reward_dist = Normal(reward, jnp.zeros_like(reward))
             return reward_dist, reward_params
 
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
-            return {'dt': env.dt}
+            return {'dt': self.env.dt}
+        
+    reward_model_swing_up = PendulumReward(reward_env=swing_up_env, reward_source=reward_source)
+    reward_model_balance = PendulumReward(reward_env=balance_env, reward_source=reward_source)
+    reward_model_swing_down = PendulumReward(reward_env=swing_down_env, reward_source=reward_source)
+
+    reward_model_mapping = {
+        'swing-up': reward_model_swing_up,
+        'balance': reward_model_balance,
+        'swing-down': reward_model_swing_down
+    }
+
+    # Retrieve eval envs
+    env = env_mapping.get(env_name, None)
+    eval_env = env_mapping.get(eval_env_name, None)
+    reward_model_list = reward_model_mapping.get(eval_env_name, None)
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -205,15 +239,18 @@ def experiment(project_name: str = 'GPUSpeedTest',
     elif exploration == 'pets':
         agent_class = PETSModelBasedAgent
         additional_agent_kwarg = {}
+    elif exploration == 'mean':
+        agent_class = MeanModelBasedAgent
+        additional_agent_kwarg = {}
     else:
         raise NotImplementedError
 
     agent = agent_class(
         env=env,
-        eval_env=env,
+        eval_env=eval_env,
         statistical_model=model,
         optimizer=optimizer,
-        reward_model=PendulumReward(reward_source=reward_source),
+        reward_model=PendulumReward(env, reward_source),
         episode_length=horizon,
         offline_data=offline_data,
         num_envs=1,
@@ -250,6 +287,8 @@ def main(args):
                regression_model=args.regression_model,
                exploration_factor=args.exploration_factor,
                horizon=args.horizon,
+               env_name=args.env,
+               eval_env_name=args.eval_env,
                log_wandb=bool(args.log_wandb),
                entity=args.entity,
                int_rew_weight_init=args.int_rew_weight_init,
@@ -282,6 +321,8 @@ if __name__ == '__main__':
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--exploration_factor', type=float, default=2.0)
+    parser.add_argument('--env', type=str, default='swing-up')
+    parser.add_argument('--eval_env', type=str, default='balance')
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--log_wandb', type=int, default=1)
     parser.add_argument('--entity', type=str, default='trevenl')
