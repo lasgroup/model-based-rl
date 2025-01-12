@@ -18,6 +18,10 @@ def experiment(
         regression_model: str = 'probabilistic_ensemble',
         beta: float = 2.0,
         weight_decay: float = 0.0,
+        int_rew_weight_init: float = 1.0,
+        int_rew_weight_end: float = 0.0,
+        rew_decrease_steps: int = 20,
+        sample_with_eps_std: bool = False,
         env_name: str = 'swing-up',
         eval_env_name: str = 'swing-up',
         optimizer: str = 'icem',
@@ -42,14 +46,15 @@ def experiment(
     from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
+    from optax import linear_schedule
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
 
     log_wandb = True
     # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
-    assert exploration in ['optimistic', 'mean',
-                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+    assert exploration in ['optimistic', 'mean', 'ocorl',
+                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean' or 'ocorl'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
     assert env_name in ['swing-up', 'balance']
@@ -71,6 +76,10 @@ def experiment(
                   regression_model=regression_model,
                   beta=beta,
                   weight_decay=weight_decay,
+                  int_rew_weight_init=int_rew_weight_init,
+                  int_rew_weight_end=int_rew_weight_end,
+                  rew_decrease_steps=rew_decrease_steps,
+                  sample_with_eps_std=sample_with_eps_std,
                   env=env_name,
                   eval_env=eval_env_name
                   )
@@ -87,6 +96,10 @@ def experiment(
             icem_num_steps=icem_num_steps,
             icem_colored_noise_exponent=icem_colored_noise_exponent
         )
+
+    int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
+                                        end_value=int_rew_weight_end,
+                                        transition_steps=rew_decrease_steps)
 
     swing_up_env = ContinuousPendulumEnv(reward_source=reward_source)
     swing_down_params = swing_up_env.reward_params.replace(target_angle=jnp.pi)
@@ -280,10 +293,19 @@ def experiment(
     agent_class = None
     if exploration == 'optimistic':
         agent_class = ContinuousOptimisticModelBasedAgent
+        additional_agent_kwarg = {'use_hallucinated_controls': False,
+                                  'int_reward_weight': int_reward_weight,
+                                  'sample_with_eps_std': sample_with_eps_std,
+                                  }
+    elif exploration == 'ocorl':
+        agent_class = ContinuousOptimisticModelBasedAgent
+        additional_agent_kwarg = {'use_hallucinated_controls': True}
     elif exploration == 'pets':
         agent_class = ContinuousPETSModelBasedAgent
+        additional_agent_kwarg = {}
     elif exploration == 'mean':
         agent_class = ContinuousMeanModelBasedAgent
+        additional_agent_kwarg = {}
     else:
         raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
@@ -336,6 +358,7 @@ def experiment(
         reset_statistical_model=reset_statistical_model,
         dt=env.dt,
         state_extras_ref=state_extras,
+        **additional_agent_kwarg
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -364,6 +387,9 @@ def main(args):
                regression_model=args.regression_model,
                beta=args.beta,
                weight_decay=args.weight_decay,
+               int_rew_weight_init=args.int_rew_weight_init,
+               int_rew_weight_end=args.int_rew_weight_end,
+               rew_decrease_steps=args.rew_decrease_steps,
                env_name=args.env,
                eval_env_name=args.eval_env,
                optimizer=args.optimizer,
@@ -387,11 +413,14 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean'], default='mean')
+    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'ocorl'], default='ocorl')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
+    parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_end', type=float, default=0.1)
+    parser.add_argument('--rew_decrease_steps', type=int, default=20)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')

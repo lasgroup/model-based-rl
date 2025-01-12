@@ -3,7 +3,8 @@ from .continuous_base_model_based_agent import ContinuousBaseModelBasedAgent
 from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, MeanActor
 from mbrl.model_based_agent.system_wrapper import OptimisticSystem, OptimisticDynamics,\
-    ContinuousOptimisticSystem, ContinuousOptimisticDynamics, OMBRLDynamics, OMBRLSystem
+    ContinuousOptimisticSystem, ContinuousOptimisticDynamics, OMBRLDynamics, OMBRLSystem,\
+    ContinuousOMBRLSystem, ContinuousOMBRLDynamics
 from typing import Union
 import optax
 import wandb
@@ -78,25 +79,74 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
         return new_agent_state
 
 class ContinuousOptimisticModelBasedAgent(ContinuousBaseModelBasedAgent):
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 use_hallucinated_controls: bool = True,
+                 int_reward_weight: Union[float, optax.Schedule] = 1.0,
+                 sample_with_eps_std: bool = False,
+                 *args, **kwargs):
+        self.use_hallucinated_controls = use_hallucinated_controls
+        if isinstance(int_reward_weight, float):
+            self.int_reward_weight = optax.constant_schedule(int_reward_weight)
+        else:
+            self.int_reward_weight = int_reward_weight
+        import warnings
+        warnings.warn(
+            f'intrinsic reward weight is ignored when use hallucination controls is true.'
+        )
+        self.sample_with_eps_std = sample_with_eps_std
         super().__init__(*args, **kwargs)
 
     def prepare_actor(self,
                       optimizer: BaseOptimizer,
                       ) -> Actor:
-        dynamics, system, actor = ContinuousOptimisticDynamics, ContinuousOptimisticSystem, OptimisticActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
-                            x_dim=self.env.observation_size,
-                            u_dim=self.env.action_size,
-                            predict_difference=self.predict_difference,
-                            dt=self.dt)
-        system = system(dynamics=dynamics,
-                        reward=self.reward_model, )
-        actor = actor(env_observation_size=self.env.observation_size,
-                      env_action_size=self.env.action_size,
-                      optimizer=optimizer)
-        actor.set_system(system=system)
+        if self.use_hallucinated_controls:
+            dynamics, system, actor = ContinuousOptimisticDynamics, ContinuousOptimisticSystem, OptimisticActor
+            dynamics = dynamics(statistical_model=self.statistical_model,
+                                x_dim=self.env.observation_size,
+                                u_dim=self.env.action_size,
+                                predict_difference=self.predict_difference,
+                                dt=self.dt)
+            system = system(dynamics=dynamics,
+                            reward=self.reward_model, )
+            actor = actor(env_observation_size=self.env.observation_size,
+                        env_action_size=self.env.action_size,
+                        optimizer=optimizer)
+            actor.set_system(system=system)
+        else:
+            dynamics, system, actor = ContinuousOMBRLDynamics, ContinuousOMBRLSystem, MeanActor
+            dynamics = dynamics(statistical_model=self.statistical_model,
+                                x_dim=self.env.observation_size,
+                                u_dim=self.env.action_size,
+                                predict_difference=self.predict_difference,
+                                sample_with_eps_std=self.sample_with_eps_std,
+                                )
+            system = system(dynamics=dynamics,
+                            reward=self.reward_model,
+                            int_reward_weight=self.int_reward_weight(0),
+                            )
+            actor = actor(env_observation_size=self.env.observation_size,
+                          env_action_size=self.env.action_size,
+                          optimizer=optimizer)
+            actor.set_system(system=system)
         return actor
+    
+    def train_policy(self,
+                     agent_state: ModelBasedAgentState,
+                     episode_idx: int) -> ModelBasedAgentState:
+        new_agent_state = super().train_policy(agent_state, episode_idx)
+        if isinstance(self.actor.optimizer.system, ContinuousOMBRLSystem):
+            int_reward_weight = self.int_reward_weight(episode_idx)
+            new_system_params = new_agent_state.optimizer_state.system_params.replace(
+                int_reward_weight=int_reward_weight)
+            new_optimizer_state = new_agent_state.optimizer_state.replace(system_params=new_system_params)
+            new_agent_state = new_agent_state.replace(optimizer_state=new_optimizer_state)
+
+            if self.log_to_wandb:
+                wandb.log({'int_reward_weight': new_agent_state.optimizer_state.system_params.int_reward_weight})
+            else:
+                print(f'int_reward_weight {int_reward_weight}')
+        return new_agent_state
+
 
 if __name__ == "__main__":
     from mbrl.envs.pendulum import PendulumEnv

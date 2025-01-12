@@ -12,6 +12,12 @@ from mbpo.systems.dynamics.base_dynamics import DynamicsParams as DummyDynamicsP
 from bsm.statistical_model import StatisticalModel
 from bsm.utils.type_aliases import ModelState, StatisticalModelState
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
+import flax.struct as struct
+
+
+@chex.dataclass
+class OMBRLSystemParams(SystemParams, Generic[DummyDynamicsParams, RewardParams]):
+    int_reward_weight: float = struct.field(default_factory=lambda: 1.0)
 
 
 @chex.dataclass
@@ -251,6 +257,46 @@ class ContinuousMeanExplorationDynamics(ContinuousPetsExplorationDynamics, Gener
         return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
 
 
+class ContinuousOMBRLDynamics(ContinuousPetsDynamics, Generic[ModelState]):
+    def __init__(self,
+                 sample_with_eps_std: bool = True,
+                 *args,
+                 **kwargs
+                 ):
+        super().__init__(*args, **kwargs)
+        self.sample_with_eps_std = int(sample_with_eps_std)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # Create state-action pair
+        z = jnp.concatenate([x, u])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+        model_output = self.statistical_model(input=z,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        scale_std = model_output.epistemic_std * self.sample_with_eps_std
+        # Use normalized (scale-invariant) disagreement
+        int_reward = jnp.linalg.norm(model_output.epistemic_std /
+                                     dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
+        dx_next_dist = Normal(loc=model_output.mean, scale=scale_std)
+        dx_next = dx_next_dist.sample(seed=key_sample_x_next)
+        x_next = x + dx_next * self.dt
+
+        # Concatenate state and last num_frame_stack actions
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+
+        int_reward = jnp.atleast_1d(int_reward)
+        x_next_with_reward = jnp.concatenate([x_next, int_reward], axis=-1)
+        aleatoric_std = model_output.aleatoric_std * self.dt 
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+        aleatoric_std_with_reward = jnp.concatenate([aleatoric_std, jnp.zeros_like(int_reward)], axis=-1)
+        return Normal(loc=x_next_with_reward, scale=aleatoric_std_with_reward), new_dynamics_params
+
+
 class ContinuousPetsSystem(System, Generic[ModelState, RewardParams]):
     def __init__(self, dynamics: ContinuousPetsDynamics[ModelState], reward: Reward[RewardParams]):
         super().__init__(dynamics, reward)
@@ -430,3 +476,62 @@ class ContinuousOptimisticExplorationSystem(ContinuousPetsExplorationSystem, Gen
 
 class ContinuousMeanExplorationSystem(ContinuousPetsExplorationSystem, Generic[ModelState, RewardParams]):
     pass
+
+
+class ContinuousOMBRLSystem(ContinuousPetsSystem):
+    def __init__(self, int_reward_weight: float = 1.0, *args, **kwargs):
+        self.int_reward_weight = int_reward_weight
+        super().__init__(*args, **kwargs)
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: OMBRLSystemParams[ModelState, RewardParams],
+             ) -> SystemState:
+        """
+
+        :param x: current state of the system
+        :param u: current action of the system
+        :param system_params: parameters of the system
+        :return: Tuple of next state, reward, updated system parameters
+        """
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        x_next_dist, new_dynamics_params = self.dynamics.next_state(x, u, system_params.dynamics_params)
+        next_state_key, reward_key, new_systems_key = jr.split(system_params.key, 3)
+        x_next = x_next_dist.sample(seed=next_state_key)
+        # next state should also include the intrinsic reward
+        assert x_next.shape == (self.x_dim + 1,)
+        # extract next state and intrinsic reward
+        x_next, int_reward = x_next[:-1], x_next[-1].sum()
+        reward, new_reward_params = self.get_reward(x, u, system_params.reward_params, x_next, reward_key)
+        reward = reward + system_params.int_reward_weight * int_reward
+        new_systems_params = system_params.replace(dynamics_params=new_dynamics_params,
+                                                   reward_params=new_reward_params,
+                                                   key=new_systems_key)
+        new_system_state = SystemState(
+            x_next=x_next,
+            reward=reward,
+            system_params=new_systems_params,
+            done=jnp.array(0.0),
+        )
+        return new_system_state
+
+    def init_params(self, key: chex.PRNGKey) -> OMBRLSystemParams[ModelState, RewardParams]:
+        keys = jr.split(key, 3)
+        return OMBRLSystemParams(
+            dynamics_params=self.dynamics.init_params(keys[0]),
+            reward_params=self.reward.init_params(keys[1]),
+            key=keys[2],
+            int_reward_weight=self.int_reward_weight,
+        )
+
+    def vmap_input_axis(self, data_axis: int = 0) -> OMBRLSystemParams[ModelState, RewardParams]:
+        return OMBRLSystemParams(
+            dynamics_params=self.dynamics.vmap_input_axis(data_axis),
+            reward_params=None,
+            key=data_axis,
+            int_reward_weight=None,
+        )
+
+    def system_params_vmap_axes(self, axes: int = 0):
+        return self.vmap_input_axis(data_axis=axes)
