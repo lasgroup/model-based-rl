@@ -5,7 +5,7 @@ from mbpo.optimizers.base_optimizer import BaseOptimizer
 from mbpo.optimizers.policy_optimizers.brax_optimizers import BraxOptimizer
 from mbrl.model_based_agent.optimizer_wrapper import Actor, OptimisticActor, PetsActor, MeanActor
 from mbrl.model_based_agent.system_wrapper import ContinuousOptimisticExplorationSystem, ContinuousOptimisticExplorationDynamics, \
-    ContinuousExplorationReward, ContinuousPetsSystem, ContinuousPetsDynamics, ContinuousPetsExplorationDynamics, ContinuousPetsExplorationSystem, \
+    ContinuousExplorationReward, ContinuousMeanSystem, ContinuousMeanDynamics, ContinuousPetsExplorationDynamics, ContinuousPetsExplorationSystem, \
     ContinuousMeanExplorationDynamics, ContinuousMeanExplorationSystem
 from mbpo.utils.type_aliases import OptimizerState
 import chex
@@ -77,7 +77,7 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
     def prepare_actors_for_reward_models(self, optimizer: BaseOptimizer, key: chex.Array) -> List[Tuple[Actor,
     OptimizerState]]:
         actors_and_opt_states = []
-        dynamics_type, system_type, actor_type = ContinuousPetsDynamics, ContinuousPetsSystem, PetsActor
+        dynamics_type, system_type, actor_type = ContinuousMeanDynamics, ContinuousMeanSystem, MeanActor
         for reward_model in self.reward_model_list:
             optimizer_new = copy.deepcopy(optimizer)
             if isinstance(optimizer_new, BraxOptimizer):
