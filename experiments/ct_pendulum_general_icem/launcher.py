@@ -1,11 +1,11 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Jan13_22_45_Test_COMBRL'
+PROJECT_NAME = 'CT_PendulumGeneral_Jan14_11_45_Test_COMBRL_balance'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(3)),
+    'seed': list(range(5)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -17,7 +17,7 @@ general_configs = {
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['optimistic','mean','pets','ocorl'],
+    'exploration': ['optimistic','mean','ocorl'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'], # ,'GP'],
     'beta': [2.0],
@@ -25,8 +25,8 @@ general_configs = {
     'int_rew_weight_init': [1.0],
     'int_rew_weight_end': [0.0],
     'rew_decrease_steps': [10],
-    'env': ['swing-up'], #,'balance'],
-    'eval_env': ['swing-up'],
+    'env': ['swing-up','balance'],
+    'eval_env': ['swing-up','balance'],
 }
 
 sac_configs = (
