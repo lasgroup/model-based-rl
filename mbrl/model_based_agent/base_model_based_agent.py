@@ -287,7 +287,7 @@ class BaseModelBasedAgent(ABC):
 
             num_tests = 10_000
             self.states = jr.uniform(key=subkey, shape=(num_tests, 5,), minval=jnp.array([-1,0.,-1,-1,-1]), maxval=jnp.array([-1,2*jnp.pi,1,1,1]))
-            self.states = jnp.stack([100*self.env.dynamics_params.max_lin_speed*self.states[:,0],
+            self.states = jnp.stack([10*self.env.dynamics_params.max_lin_speed*self.states[:,0],
                                      jnp.cos(self.states[:,1]), 
                                      jnp.sin(self.states[:,1]), 
                                      self.env.dynamics_params.max_lin_speed*self.states[:,2],
