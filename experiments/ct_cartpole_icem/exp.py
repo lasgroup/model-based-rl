@@ -52,12 +52,12 @@ def experiment(
     # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
-    assert exploration in ['optimistic', 'mean', 'random',
-                           'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'or ''random"
+    # assert exploration in ['optimistic', 'mean', 'random',
+    #                        'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'or ''random"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
-    assert env_name in ['swing-up', 'balance']
-    assert eval_env_name in ['swing-up', 'balance']
+    # assert env_name in ['swing-up', 'balance']
+    # assert eval_env_name in ['swing-up', 'balance']
 
 
     general_config = dict(num_offline_samples=num_offline_samples,
@@ -95,19 +95,8 @@ def experiment(
 
     cartpole_env = ContinuousCartpoleEnv(reward_source=reward_source)
 
-    env_mapping = {
-        'swing-up': swing_up_env,
-        'swing-down': swing_down_env,
-        'balance': balance_env
-    }
-
-    env = env_mapping.get(env_name, None)
-    eval_env = env_mapping.get(eval_env_name, None)
-
-    # adjust control cost
-    control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
-    env.reward_params = control_cost_params
-    eval_env.reward_params = control_cost_params
+    env = cartpole_env
+    eval_env = cartpole_env
 
     key_offline_data, key_agent = jr.split(jr.PRNGKey(seed))
 
@@ -204,15 +193,15 @@ def experiment(
     max_replay_size_true_data_buffer = 10 ** 4
 
     extra_fields = ('derivative', 't', 'dt')
-    extra_fields_shape = (swing_up_env.observation_size, 1, 1)
+    extra_fields_shape = (cartpole_env.observation_size, 1, 1)
     # extra_fields_shape = (env.observation_size,) * 1 + (1,) * 2
     state_extras: dict = {x: jnp.zeros(shape=(y,)) for x,y in zip(extra_fields, extra_fields_shape)}
 
-    dummy_sample = Transition(observation=jnp.ones(swing_up_env.observation_size),
-                              action=jnp.zeros(shape=(swing_up_env.action_size,)),
+    dummy_sample = Transition(observation=jnp.ones(cartpole_env.observation_size),
+                              action=jnp.zeros(shape=(cartpole_env.action_size,)),
                               reward=jnp.array(0.0),
                               discount=jnp.array(0.99),
-                              next_observation=jnp.ones(swing_up_env.observation_size),
+                              next_observation=jnp.ones(cartpole_env.observation_size),
                               extras={'state_extras': state_extras})
 
     if optimizer == 'sac':
@@ -275,9 +264,6 @@ def experiment(
                    config=config)
 
     
-    # debugging. TODO: REMOVE!
-    print("Max speed is: ", env.max_speed)
-    
     agent_class = None
     if exploration == 'ocorl':
         agent_class = ContinuousOptimisticModelBasedAgent
@@ -290,7 +276,7 @@ def experiment(
     else:
         raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
-    class PendulumReward(Reward):
+    class CartpoleReward(Reward):
         def __init__(self, reward_env: ContinuousCartpoleEnv, reward_source: str):
             super().__init__(x_dim=3, u_dim=1)
             self.env = reward_env
@@ -304,18 +290,18 @@ def experiment(
                      ):
             assert x.shape == (5,) and u.shape == (1,)
             theta, omega = jnp.arctan2(x[2], x[1]), x[-1]
-            target_angle = self.reward_params.target_angle
+            target_angle = self.env.reward_params.target_angle
             pos, vel = x[0], x[3]
             diff_th = theta - target_angle
             diff_th = ((diff_th + jnp.pi) % (2 * jnp.pi)) - jnp.pi
             if self.reward_source == 'gym':
-                reward = -(self.reward_params.angle_cost * diff_th ** 2 +
-                   self.reward_params.pos_cost * pos ** 2 +
+                reward = -(self.env.reward_params.angle_cost * diff_th ** 2 +
+                   self.env.reward_params.pos_cost * pos ** 2 +
                    0.1 * omega ** 2 + 
-                   0.1 * vel ** 2) - self.reward_params.control_cost * u ** 2
+                   0.1 * vel ** 2) - self.env.reward_params.control_cost * u ** 2
             elif self.reward_source == 'dm-control':
-                reward = self.tolerance_reward(jnp.sqrt(self.reward_params.angle_cost * diff_th ** 2 +
-                                       0.1 * omega ** 2)) - self.reward_params.control_cost * u ** 2
+                reward = self.env.tolerance_reward(jnp.sqrt(self.env.reward_params.angle_cost * diff_th ** 2 +
+                                       0.1 * omega ** 2)) - self.env.reward_params.control_cost * u ** 2
             else:
                 raise ValueError(f"Invalid reward source: {self.reward_source}. Expected 'gym' or 'dm-control'.")            
             reward = reward.squeeze()
@@ -325,24 +311,45 @@ def experiment(
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': self.env.dt}
 
-    agent = agent_class(
-        env=env,
-        eval_env=eval_env,
-        statistical_model=model,
-        optimizer=optimizer,
-        episode_length=num_online_samples,
-        reward_model=PendulumReward(env, reward_source),
-        offline_data=offline_data,
-        num_envs=1,
-        num_eval_envs=1,
-        log_to_wandb=log_wandb,
-        deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
-        first_episode_for_policy_training=first_episode_for_policy_training,
-        predict_difference=False,
-        reset_statistical_model=reset_statistical_model,
-        save_trajectory_transitions=save_trajectory_transitions,
-        dt=env.dt,
-        state_extras_ref=state_extras,
+    if exploration in ['ocorl', 'mean']:
+        agent = agent_class(
+            env=env,
+            eval_env=eval_env,
+            statistical_model=model,
+            optimizer=optimizer,
+            episode_length=num_online_samples,
+            reward_model=CartpoleReward(env, reward_source),
+            offline_data=offline_data,
+            num_envs=1,
+            num_eval_envs=1,
+            log_to_wandb=log_wandb,
+            deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+            first_episode_for_policy_training=first_episode_for_policy_training,
+            predict_difference=False,
+            reset_statistical_model=reset_statistical_model,
+            save_trajectory_transitions=save_trajectory_transitions,
+            dt=env.dt,
+            state_extras_ref=state_extras,
+        )
+    else:
+        eval_envs=[ContinuousCartpoleEnv(reward_source)]
+        agent = agent_class(
+            env=env,
+            eval_envs=eval_envs,
+            reward_model_list=[CartpoleReward(env, reward_source)],
+            statistical_model=model,
+            optimizer=optimizer,
+            episode_length=num_online_samples,
+            offline_data=offline_data,
+            num_envs=1,
+            num_eval_envs=1,
+            log_to_wandb=log_wandb,
+            deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
+            first_episode_for_policy_training=first_episode_for_policy_training,
+            predict_difference=False,
+            reset_statistical_model=reset_statistical_model,
+            dt=env.dt,
+            state_extras_ref=state_extras,
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -384,18 +391,18 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='ICEM_CT_Pendulum')
+    parser.add_argument('--project_name', type=str, default='ICEM_CT_Cartpole')
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
-    parser.add_argument('--reward_source', type=str, default='dm-control')
+    parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--control_cost', type=float, default=0.02)
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'random'], default='mean')
+    parser.add_argument('--exploration', type=str, choices=['ocorl', 'optimistic-ae', 'mean', 'mean-ae'], default='optimistic-ae')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)

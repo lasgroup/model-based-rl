@@ -7,7 +7,7 @@ ENTITY = 'kiten'
 # print("Warning: This instance uses randomized initial angles for experiment purposes")
 
 general_configs = {
-    'seed': list(range(3)),
+    'seed': list(range(10)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
@@ -19,13 +19,13 @@ general_configs = {
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['mean'],
+    'exploration': ['mean','ocorl','optimistic-ae','mean-ae'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'env': ['balance'],
-    'eval_env': ['balance','swing-up'],
+    'eval_env': ['balance'],
     'save_trajectory_transitions': [1],
 }
 

@@ -216,11 +216,13 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
             key, subkey = jr.split(key)
 
             num_tests = 100_000
-            self.states = jr.uniform(key=subkey, shape=(num_tests, 3,), minval=jnp.array([0.,-1,-1]), maxval=jnp.array([2*jnp.pi,1,1]))
-            self.states = jnp.stack([jnp.cos(self.states[:,0]), 
-                                     jnp.sin(self.states[:,0]), 
-                                     self.env.dynamics_params.max_speed*self.states[:,1],
-                                     self.env.dynamics_params.max_torque*self.states[:,2]], axis=-1)
+            self.states = jr.uniform(key=subkey, shape=(num_tests, 5,), minval=jnp.array([-1,0.,-1,-1,-1]), maxval=jnp.array([-1,2*jnp.pi,1,1,1]))
+            self.states = jnp.stack([10*self.env.dynamics_params.max_lin_speed*self.states[:,0],
+                                     jnp.cos(self.states[:,1]), 
+                                     jnp.sin(self.states[:,1]), 
+                                     self.env.dynamics_params.max_lin_speed*self.states[:,2],
+                                     self.env.dynamics_params.max_ang_speed*self.states[:,3],
+                                     self.env.dynamics_params.max_force*self.states[:,4]], axis=-1)
             agent_state = self.init(key)
             actors_for_reward_models = self.actors_and_opt_states
         for episode_idx in range(num_episodes):
