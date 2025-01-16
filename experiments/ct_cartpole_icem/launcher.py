@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Cartpole_Jan15_23_55_EpUncert'
+PROJECT_NAME = 'CT_Cartpole_Jan15_23_59_EpUncert_Less_Samples'
 ENTITY = 'kiten'
 
 # print("Warning: This instance uses randomized initial angles for experiment purposes")
