@@ -1,18 +1,18 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Cartpole_Jan15_23_59_EpUncert_Less_Samples'
+PROJECT_NAME = 'CT_Cartpole_Jan16_13_45_EpUncert_Broader_Samples_Shorter Horizon'
 ENTITY = 'kiten'
 
 # print("Warning: This instance uses randomized initial angles for experiment purposes")
 
 general_configs = {
-    'seed': list(range(10)),
+    'seed': list(range(5)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
     'num_offline_samples': [0],
-    'num_online_samples': [200],
+    'num_online_samples': [100,200],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'control_cost': [0.02],
