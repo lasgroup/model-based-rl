@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_PendulumGeneral_Jan08_15_55_Test4_RandomizedInit'
+PROJECT_NAME = 'CT_PendulumGeneral_Jan17_01_55_EpUncert_PETS'
 ENTITY = 'kiten'
 
 print("Warning: This instance uses randomized initial angles for experiment purposes")
@@ -19,7 +19,7 @@ general_configs = {
     'num_episodes': [10],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['mean'],
+    'exploration': ['pets'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'],
     'beta': [2.0],
