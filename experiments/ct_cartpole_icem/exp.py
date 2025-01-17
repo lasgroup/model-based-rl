@@ -43,7 +43,7 @@ def experiment(
     from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.cartpole import ContinuousCartpoleEnv
-    from mbrl.model_based_agent import ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
+    from mbrl.model_based_agent import ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent, ContinuousPETSModelBasedAgent
     from mbrl.model_based_agent.continuous_active_exploration_model_based_agents import\
          ContinuousOptimisticActiveExplorationModelBasedAgent,\
          ContinuousMeanActiveExplorationModelBasedAgent
@@ -273,6 +273,8 @@ def experiment(
         agent_class = ContinuousMeanModelBasedAgent
     elif exploration == 'mean-ae':
         agent_class = ContinuousMeanActiveExplorationModelBasedAgent
+    elif exploration == 'pets':
+        agent_class = ContinuousPETSModelBasedAgent
     else:
         raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
 
@@ -311,7 +313,7 @@ def experiment(
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': self.env.dt}
 
-    if exploration in ['ocorl', 'mean']:
+    if exploration in ['ocorl', 'mean','pets']:
         agent = agent_class(
             env=env,
             eval_env=eval_env,
@@ -402,7 +404,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['ocorl', 'optimistic-ae', 'mean', 'mean-ae'], default='optimistic-ae')
+    parser.add_argument('--exploration', type=str, choices=['ocorl', 'optimistic-ae', 'mean', 'mean-ae','pets'], default='optimistic-ae')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
     parser.add_argument('--beta', type=float, default=2.0)
