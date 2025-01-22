@@ -27,6 +27,9 @@ general_configs = {
     'rew_decrease_steps': [10],
     'env': ['swing-up'],
     'eval_env': ['swing-up'],
+    'reward_bound': [0.1],
+    'reward_value_at_margin': [0.1],
+    'reward_margin_factor': [10],
 }
 
 sac_configs = (

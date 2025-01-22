@@ -41,12 +41,12 @@ class ContinuousPendulumEnv(Env):
     def __init__(self, reward_source: str = 'gym',
                  noise_level: chex.Array | None = None,
                  init_noise_key: chex.PRNGKey | None = None,
-                 initial_angle: float = jnp.pi):
+                 initial_angle: float = jnp.pi,
+                 bound: float = 0.1,
+                 value_at_margin: float = 0.1,
+                 margin_factor: float = 10.0):
         self.dynamics_params = PendulumDynamicsParams()
         self.reward_params = PendulumRewardParams()
-        bound = 0.1
-        value_at_margin = 0.1
-        margin_factor = 10.0
         self.reward_source = reward_source  # 'dm-control' or 'gym'
         self.noise_level = noise_level      # Noise level can have one value (for both angle and speed) or two separate values
         self.init_noise_key = init_noise_key
@@ -175,10 +175,35 @@ class ContinuousPendulumEnv(Env):
     
 
 if __name__ == "__main__":
-    env = ContinuousPendulumEnv(initial_angle=jnp.pi/2)
+    from jax import vmap
+    import matplotlib.pyplot as plt
+
+    env = ContinuousPendulumEnv(initial_angle=jnp.pi,
+                                margin_factor = 10)
     initial_state = env.reset(jax.numpy.zeros(0))
-    initial_action = jax.numpy.ones(env.action_size)
+    initial_action = jax.numpy.zeros(env.action_size)
     next_state = env.step(initial_state, initial_action)
 
     for ii in range(10):
+        current_reward = env.reward(next_state.obs, initial_action)
         next_state = env.step(next_state, initial_action)
+
+    x = jnp.linspace(0, 2*jnp.pi, 360)
+    x_state = jnp.stack([jnp.cos(x), jnp.sin(x), jnp.zeros_like(x)], axis=1)
+    u = jnp.zeros((360,))
+    
+    fix, ax = plt.subplots()
+    
+    for margin_factor in [2,5,10]:
+        env = ContinuousPendulumEnv(initial_angle=jnp.pi, 
+                                    bound=0.1,
+                                    value_at_margin=0.1,
+                                    margin_factor=margin_factor)
+        reward = vmap(env.dm_reward)(x_state, u)
+        ax.plot(360*x/(2*jnp.pi), reward, label=f'margin_factor={margin_factor}')
+
+    plt.tight_layout()
+    plt.legend()
+    plt.grid()
+    ax.set_xticks(jnp.arange(0, 360, 20))  
+    plt.show()
