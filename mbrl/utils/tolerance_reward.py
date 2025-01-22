@@ -142,15 +142,22 @@ class ToleranceReward:
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    from mbrl.envs.pendulum import PendulumRewardParams as RewardParams
 
-    bound = 0.05
+    reward_params = RewardParams()
+    angle_cost = reward_params.angle_cost
+
+    bound = 0.1
     value_at_margin = 0.1
-    for margin_factor in [5]:
+    for margin_factor in [2,5,10]:
         reward = ToleranceReward(bounds=(0.0, bound), margin=margin_factor * bound, value_at_margin=value_at_margin,
                                  sigmoid='gaussian')
         x = jnp.linspace(0, 4, 1000)
+        omega = 0
 
-        y = reward(x)
-        plt.plot(x, y)
-        plt.title(f'margin_factor={margin_factor}')
-        plt.show()
+        y = reward(angle_cost * x ** 2 + 0.1 * omega ** 2)
+        plt.plot(x, y,label=f'margin_factor={margin_factor}')
+        plt.tight_layout()
+        plt.legend()
+        
+    plt.show()
