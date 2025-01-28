@@ -223,15 +223,15 @@ class BaseModelBasedAgent(ABC):
                    ) -> ModelBasedAgentState:
         if episode_idx > 0 or self.offline_data:
             # If we collected some data already then we train dynamics model and the policy
-            print(f'Start of dynamics training')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start of dynamics training")
             agent_state = self.train_dynamics_model(agent_state=agent_state,
                                                     episode_idx=episode_idx)
-            print(f'End of dynamics training')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of dynamics training")
             if episode_idx >= self.first_episode_for_policy_training:
-                print(f'Start of policy training')
+                print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start of policy training")
                 agent_state = self.train_policy(agent_state=agent_state,
                                                 episode_idx=episode_idx)
-                print(f'End of policy training')
+                print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of policy training")
         # We collect new data with the current policy
         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start with data collection") # TODO: Remove line (Debugging)
         print(f'Start of data collection')
@@ -247,14 +247,14 @@ class BaseModelBasedAgent(ABC):
             wandb.save(model_path, wandb.run.dir)
         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of data collection") # TODO: Remove line (Debugging)
         print(f'End of data collection')
-        print(f'Start with evaluation of the policy')
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start with evaluation of the policy")
         metrics, data = self.env_interactor.run_evaluation(actor=self.actor,
                                                      actor_state=agent_state.optimizer_state)
         if self.log_to_wandb:
             wandb.log(metrics | {'episode_idx': episode_idx})
         else:
             print(metrics)
-        print(f'End with evaluation of the policy')
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End with evaluation of the policy")
         return agent_state
 
     def run_episodes(self,

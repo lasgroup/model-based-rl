@@ -24,6 +24,7 @@ def experiment(
         sample_with_eps_std: bool = False,
         env_name: str = 'swing-up',
         eval_env_name: str = 'swing-up',
+        eval_env_names: list[str] = ['swing-up'],
         reward_bound: float = 0.1,
         reward_value_at_margin: float = 0.1,
         reward_margin_factor: float = 10.,
@@ -51,6 +52,7 @@ def experiment(
     from mbrl.envs.pendulum_ct import ContinuousPendulumEnv
     from optax import linear_schedule
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
+    from mbrl.model_based_agent.base_agent_wrapper import MultiEnvEvaluatorWrapper
 
     log_wandb = True
     # jax.config.update('jax_log_compiles', True)
@@ -84,7 +86,7 @@ def experiment(
                   rew_decrease_steps=rew_decrease_steps,
                   sample_with_eps_std=sample_with_eps_std,
                   env=env_name,
-                  eval_env=eval_env_name,
+                  eval_env=eval_env_names,
                   reward_bound=reward_bound,
                   reward_value_at_margin=reward_value_at_margin,
                   reward_margin_factor=reward_margin_factor,
@@ -130,6 +132,7 @@ def experiment(
 
     env = env_mapping.get(env_name, None)
     eval_env = env_mapping.get(eval_env_name, None)
+    eval_envs = [env_mapping[name] for name in eval_env_names]
 
     # adjust control cost
     control_cost_params = env.reward_params.replace(control_cost=jnp.array(control_cost))
@@ -356,6 +359,19 @@ def experiment(
         def init_params(self, key: chex.PRNGKey) -> RewardParams:
             return {'dt': self.env.dt}
 
+    reward_model_swing_up = PendulumReward(reward_env=swing_up_env, reward_source=reward_source)
+    reward_model_balance = PendulumReward(reward_env=balance_env, reward_source=reward_source)
+    reward_model_swing_down = PendulumReward(reward_env=swing_down_env, reward_source=reward_source)
+
+    reward_model_mapping = {
+        'swing-up': reward_model_swing_up,
+        'balance': reward_model_balance,
+        'swing-down': reward_model_swing_down
+    }
+
+    reward_model_list = [reward_model_mapping[name] for name in eval_env_names]
+
+
     agent = agent_class(
         env=env,
         eval_env=eval_env,
@@ -376,9 +392,15 @@ def experiment(
         **additional_agent_kwarg
     )
 
-    agent_state = agent.run_episodes(num_episodes=num_episodes,
-                                     start_from_scratch=True,
-                                     key=key_agent)
+    # Wrap the agent with multiple evaluation environments
+    wrapped_agent = MultiEnvEvaluatorWrapper(agent, eval_envs, reward_model_list)
+
+    # Run training episodes with multi-environment evaluation
+    agent_state, actors_for_reward_models = wrapped_agent.run_episodes(num_episodes=num_episodes, start_from_scratch=True, key=key_agent)
+    # agent_state = agent.run_episodes(num_episodes=num_episodes,
+    #                                  start_from_scratch=True,
+    #                                  key=key_agent)
+
 
     print("Finishing wandb")
     wandb.finish()
@@ -407,6 +429,7 @@ def main(args):
                rew_decrease_steps=args.rew_decrease_steps,
                env_name=args.env,
                eval_env_name=args.eval_env,
+               eval_env_names=args.eval_envs,
                reward_bound=args.reward_bound,
                reward_value_at_margin=args.reward_value_at_margin,
                reward_margin_factor=args.reward_margin_factor,
@@ -441,6 +464,8 @@ if __name__ == '__main__':
     parser.add_argument('--rew_decrease_steps', type=int, default=20)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
+    parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 
+
     parser.add_argument('--reward_bound', type=float, default=0.1)
     parser.add_argument('--reward_value_at_margin', type=float, default=0.1)
     parser.add_argument('--reward_margin_factor', type=float, default=10)
