@@ -18,6 +18,7 @@ def experiment(
         beta: float = 2.0,
         env_name: str = 'swing-up',
         eval_env_names: list[str] = ['swing-up'],
+        use_new_optimism: bool = False,
         optimizer: str = 'icem',
         train_steps_sac: int = 500,
         optimizer_horizon: int = 100,
@@ -63,7 +64,8 @@ def experiment(
                   regression_model=regression_model,
                   beta=beta,
                   env=env_name,
-                  eval_env=eval_env_names
+                  eval_env=eval_env_names,
+                  use_new_optimism=use_new_optimism
                   )
     
     if optimizer == 'sac':
@@ -290,6 +292,7 @@ def experiment(
         reset_statistical_model=reset_statistical_model,
         dt=swing_up_env.dt,
         state_extras_ref=state_extras,
+        use_new_optimism=use_new_optimism,
     )
 
     agent_state, actors_for_reward_models = agent.run_episodes(num_episodes=num_episodes,
@@ -318,6 +321,7 @@ def main(args):
         beta=args.beta,
         env_name=args.env,
         eval_env_names=args.eval_envs,
+        use_new_optimism=bool(args.use_new_optimism),
         optimizer=args.optimizer,
         train_steps_sac=args.train_steps_sac,
         optimizer_horizon=args.optimizer_horizon,
@@ -346,6 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 
+    parser.add_argument('--use_new_optimism', type=int, default=1)
 
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)

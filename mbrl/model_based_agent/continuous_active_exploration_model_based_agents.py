@@ -15,6 +15,7 @@ import wandb
 from brax.envs import Env as BraxEnv
 from mbrl.utils.brax_utils import EnvInteractor
 import copy
+from datetime import datetime
 
 
 class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAgent):
@@ -22,8 +23,15 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
                  env: BraxEnv,
                  eval_envs: List[BraxEnv],
                  reward_model_list: List[Reward], optimizer: BaseOptimizer, eval_frequency: int = 1,
+                 use_new_optimism: bool = False,
                  *args,
                  **kwargs):
+        self.num_rewards = len(reward_model_list)
+        assert self.num_rewards > 0, 'Need at least one reward function'
+        assert len(eval_envs) == self.num_rewards, 'Need as many eval envs as reward functions'
+        self.reward_model_list = reward_model_list
+        self.eval_frequency = eval_frequency
+        self.use_new_optimism = use_new_optimism,
         super().__init__(
             reward_model=ContinuousExplorationReward(x_dim=env.observation_size, u_dim=env.action_size),
             optimizer=optimizer,
@@ -32,11 +40,6 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
             *args,
             **kwargs,
         )
-        self.num_rewards = len(reward_model_list)
-        assert self.num_rewards > 0, 'Need at least one reward function'
-        assert len(eval_envs) == self.num_rewards, 'Need as many eval envs as reward functions'
-        self.reward_model_list = reward_model_list
-        self.eval_frequency = eval_frequency
         self.env_interactors = self.prepare_env_interactors(eval_envs)
         actors_key, self.key = jr.split(self.key, 2)
         self.actors_and_opt_states = self.prepare_actors_for_reward_models(optimizer=optimizer, key=actors_key)
@@ -45,7 +48,9 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
                       optimizer: BaseOptimizer,
                       ) -> Actor:
         dynamics, system, actor = ContinuousPetsExplorationDynamics, ContinuousPetsExplorationSystem, PetsActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
+        dynamics = dynamics(use_log=not self.use_new_optimism,
+                            scale_with_aleatoric_std=not self.use_new_optimism,
+                            statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
                             predict_difference=self.predict_difference)
@@ -148,21 +153,21 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
                    episode_idx: int) -> Tuple[ModelBasedAgentState, List[Tuple[Actor, OptimizerState]]]:
         if episode_idx > 0 or self.offline_data:
             # If we collected some data already then we train dynamics model and the policy
-            print(f'Start of dynamics training')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start of dynamics training")
             agent_state = self.train_dynamics_model(agent_state=agent_state,
                                                     episode_idx=episode_idx)
-            print(f'End of dynamics training')
-            print(f'Start of policy training')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of dynamics training")
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start of policy training")
             agent_state = self.train_policy(agent_state=agent_state,
                                             episode_idx=episode_idx)
-            print(f'End of policy training')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of policy training")
         # We collect new data with the current policy
-        print(f'Start of data collection')
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start with data collection")
         agent_state, trajectory_transitions = self.simulate_on_true_env(agent_state=agent_state)
-        print(f'End of data collection')
-        print(f'Start with evaluation of the policy')
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End of data collection")
+        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start with evaluation of the policy")
         if episode_idx % self.eval_frequency == 0:
-            print(f'Start training of evaluation policy')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Start training of evaluation policy")
             actors_for_reward_models = self.train_reward_policies(actors_for_reward_models=actors_for_reward_models,
                                                                   agent_state=agent_state,
                                                                   episode_idx=episode_idx,
@@ -177,7 +182,7 @@ class ContinuousPetsActiveExplorationModelBasedAgent(ContinuousBaseModelBasedAge
                     wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
-            print(f'End with evaluation of the policy')
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End with evaluation of the policy")
         return agent_state, actors_for_reward_models
 
     def run_episodes(self,
@@ -207,7 +212,9 @@ class ContinuousOptimisticActiveExplorationModelBasedAgent(ContinuousPetsActiveE
                       optimizer: BaseOptimizer,
                       ) -> Actor:
         dynamics, system, actor = ContinuousOptimisticExplorationDynamics, ContinuousOptimisticExplorationSystem, OptimisticActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
+        dynamics = dynamics(use_log=not self.use_new_optimism,
+                            scale_with_aleatoric_std=not self.use_new_optimism,
+                            statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
                             predict_difference=self.predict_difference)
@@ -228,7 +235,9 @@ class ContinuousMeanActiveExplorationModelBasedAgent(ContinuousPetsActiveExplora
                       optimizer: BaseOptimizer,
                       ) -> Actor:
         dynamics, system, actor = ContinuousMeanExplorationDynamics, ContinuousMeanExplorationSystem, MeanActor
-        dynamics = dynamics(statistical_model=self.statistical_model,
+        dynamics = dynamics(use_log=not self.use_new_optimism,
+                            scale_with_aleatoric_std=not self.use_new_optimism,
+                            statistical_model=self.statistical_model,
                             x_dim=self.env.observation_size,
                             u_dim=self.env.action_size,
                             predict_difference=self.predict_difference)
