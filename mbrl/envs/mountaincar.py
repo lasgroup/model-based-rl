@@ -85,7 +85,7 @@ class MountainCar(Env):
             pipeline_state=initial_state,
             obs=initial_state,
             reward=jnp.array(0.0),
-            done=jnp.array(False),
+            done=jnp.array(0.0),
             info=first_info
         )
 
@@ -142,7 +142,7 @@ class MountainCar(Env):
         next_state = State(pipeline_state=next_obs,
                            obs=noisy_obs if self.noise_level is not None else next_obs,
                            reward=next_reward,
-                           done=done,
+                           done=state.done,
                            metrics=state.metrics,
                            info=next_info)
         return next_state
