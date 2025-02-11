@@ -24,6 +24,7 @@ def experiment(
         env_name: str = 'swing-up',
         eval_env_name: str = 'swing-up',
         eval_env_names: list[str] = ['swing-up'],
+        save_trajectory_transitions: bool = False,
         optimizer: str = 'icem',
         train_steps_sac: int = 500,
         optimizer_horizon: int = 100,
@@ -82,6 +83,7 @@ def experiment(
                   sample_with_eps_std=sample_with_eps_std,
                   env=env_name,
                   eval_env=eval_env_names,
+                  save_trajectory_transitions=save_trajectory_transitions,
                   )
     
     if optimizer == 'sac':
@@ -346,6 +348,7 @@ def experiment(
         first_episode_for_policy_training=first_episode_for_policy_training,
         predict_difference=False,
         reset_statistical_model=reset_statistical_model,
+        save_trajectory_transitions=save_trajectory_transitions,
         dt=env.dt,
         state_extras_ref=state_extras,
         **additional_agent_kwarg
@@ -388,6 +391,7 @@ def main(args):
                env_name=args.env,
                eval_env_name=args.eval_env,
                eval_env_names=args.eval_envs,
+               save_trajectory_transitions=bool(args.save_trajectory_transitions),
                optimizer=args.optimizer,
                train_steps_sac=args.train_steps_sac,
                optimizer_horizon=args.optimizer_horizon,
@@ -419,6 +423,8 @@ if __name__ == '__main__':
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
     parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 
+    parser.add_argument('--save_trajectory_transitions', type=int, default=1)
+
 
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='sac')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)

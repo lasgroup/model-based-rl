@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Mountaincar_Feb11_11_45_FirstTest'
+PROJECT_NAME = 'CT_Mountaincar_Feb11_17_45_SaveTrajectories'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -24,6 +24,7 @@ general_configs = {
     'int_rew_weight_init': [1.0],
     'int_rew_weight_end': [0.0],
     'rew_decrease_steps': [10],
+    'save_trajectory_transitions': [1],
 }
 
 sac_configs = (
