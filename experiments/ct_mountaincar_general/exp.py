@@ -6,6 +6,7 @@ def experiment(
         entity: str = None,
         num_offline_samples: int = 0,
         num_online_samples: int = 100,
+        action_repeat: int = 1,
         deterministic_policy_for_data_collection: bool = False,
         noise_level: list = [0.1, 0.1], # TODO: This is from Chris
         reward_source: str = 'gym',
@@ -84,6 +85,7 @@ def experiment(
                   env=env_name,
                   eval_env=eval_env_names,
                   save_trajectory_transitions=save_trajectory_transitions,
+                  action_repeat=action_repeat,
                   )
     
     if optimizer == 'sac':
@@ -343,6 +345,7 @@ def experiment(
         offline_data=offline_data,
         num_envs=1,
         num_eval_envs=1,
+        action_repeat=action_repeat,
         log_to_wandb=log_wandb,
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         first_episode_for_policy_training=first_episode_for_policy_training,
@@ -374,6 +377,7 @@ def main(args):
                entity=args.entity,
                num_offline_samples=args.num_offline_samples,
                num_online_samples=args.num_online_samples,
+               action_repeat=args.action_repeat,
                deterministic_policy_for_data_collection=bool(args.deterministic_policy_for_data_collection),
                noise_level=args.noise_level,
                reward_source=args.reward_source,
@@ -406,6 +410,7 @@ if __name__ == '__main__':
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
+    parser.add_argument('--action_repeat', type=int, default=2)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
     parser.add_argument('--reward_source', type=str, default='gym')
