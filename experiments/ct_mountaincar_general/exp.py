@@ -206,7 +206,7 @@ def experiment(
 
     discount_factor = 0.99
 
-    max_replay_size_true_data_buffer = 10 ** 4
+    max_replay_size_true_data_buffer = 10 ** 3
 
     extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (env.observation_size, 1, 1)
@@ -343,6 +343,7 @@ def experiment(
         episode_length=num_online_samples,
         reward_model=MountainCarReward(env, reward_source),
         offline_data=offline_data,
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer,
         num_envs=1,
         num_eval_envs=1,
         action_repeat=action_repeat,
