@@ -201,7 +201,7 @@ class BaseModelBasedAgent(ABC):
     def simulate_on_true_env(self,
                              agent_state: ModelBasedAgentState,
                              ) -> Tuple[ModelBasedAgentState, Transition]:
-        print("JIT recompiling simulate_on_true_env...", agent_state.optimizer_state.true_buffer_state.shape)
+        print("JIT recompiling simulate_on_true_env...", agent_state.optimizer_state.true_buffer_state.data.shape)
         key_agent, key_reset = jr.split(agent_state.key)
         env_state = self.env_interactor.reset(key=key_reset)
         optimizer_state = agent_state.optimizer_state
