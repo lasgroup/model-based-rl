@@ -1,23 +1,23 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Mountaincar_Feb12_11_00_ActionRepeat'
+PROJECT_NAME = 'CT_Mountaincar_Feb13_15_00_JAX_Recompiling'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(3)),
+    'seed': list(range(1)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
-    'optimizer': ['icem','sac'],
+    'optimizer': ['icem'],
     'num_offline_samples': [0],
     'num_online_samples': [200],
     'action_repeat': [2],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'num_episodes': [15],
-    'bnn_steps': [15_000, 50_000],
+    'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['optimistic','pets','ocorl','mean'],
+    'exploration': ['mean'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble'], # ,'GP'],
     'beta': [2.0],
@@ -42,7 +42,7 @@ icem_configs = (
     {
         **general_configs,
         'optimizer': ['icem'],
-        'optimizer_horizon': [50],
+        'optimizer_horizon': [25],
         'icem_num_steps': [10],
         'icem_colored_noise_exponent': [1.0],
     }

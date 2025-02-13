@@ -104,10 +104,27 @@ class MountainCar(Env):
 
         return jnp.squeeze(action_penalty + goal_reward), terminated
 
+    def ts_reward(self,
+               x: Float[Array, 'observation_dim'],
+               u: Float[Array, 'action_dim']) -> tuple[Float[Array, 'None'], Float[Array, 'None']]:
+        position, velocity = x[..., 0], x[..., 1]
+        action_penalty = -self.reward_params.control_cost * (u**2)
+        target_position = self.reward_params.target_position
+        target_velocity = self.reward_params.target_velocity
+
+        terminated = jnp.logical_and(
+            jnp.isclose(position, target_position),
+            jnp.isclose(velocity, target_velocity)
+            )
+
+        goal_reward = jnp.where(terminated, 100.0, 0.0)
+
+        return jnp.squeeze(action_penalty + goal_reward), terminated
   
     @partial(jax.jit, static_argnums=0)
     def step(self, state: State, action: jax.Array) -> State:
         """Run one timestep of the environment's dynamics."""
+        print("JIT recompiling env step...", state.pipeline_state.shape, action.shape)  # Debugging
         obs = state.pipeline_state
         chex.assert_shape(obs, (self.observation_size,))
         chex.assert_shape(action, (self.action_size,))
@@ -127,6 +144,8 @@ class MountainCar(Env):
 
         if self.reward_source == 'gym':
             next_reward, done = self.reward(obs, action)
+        elif self.reward_source == 'two-sided':
+            next_reward, done = self.ts_reward(obs, action)
         else:
             raise NotImplementedError(f'Unknown reward source {self.reward_source}')
 

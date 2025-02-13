@@ -406,11 +406,11 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='ICEM_CT_Pendulum')
+    parser.add_argument('--project_name', type=str, default='CT_Mountaincar')
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
-    parser.add_argument('--action_repeat', type=int, default=2)
+    parser.add_argument('--action_repeat', type=int, default=1)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
     parser.add_argument('--reward_source', type=str, default='gym')
@@ -431,7 +431,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_trajectory_transitions', type=int, default=1)
 
 
-    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='sac')
+    parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
     parser.add_argument('--optimizer_horizon', type=int, default=100)
     parser.add_argument('--icem_num_steps', type=int, default=10)
