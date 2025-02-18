@@ -2,7 +2,7 @@ import argparse
 
 def experiment(
         seed: int = 0,
-        project_name: str = 'CT_Mountaincar',
+        project_name: str = 'DT_Mountaincar',
         entity: str = None,
         num_offline_samples: int = 0,
         num_online_samples: int = 100,
@@ -12,6 +12,7 @@ def experiment(
         reward_source: str = 'gym',
         num_episodes: int = 5,
         bnn_steps: int = 5_000,
+        predict_difference: bool = True,
         first_episode_for_policy_training: int = -1,
         exploration: str = 'optimistic',
         reset_statistical_model: bool = False,
@@ -53,7 +54,7 @@ def experiment(
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.mountaincar import MountainCar
     from optax import linear_schedule, constant_schedule
-    from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
+    from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent, MeanModelBasedAgent
     from mbrl.utils.gps import ARD
     # from mbrl.model_based_agent.base_agent_wrapper import MultiEnvEvaluatorWrapper
 
@@ -61,7 +62,7 @@ def experiment(
     # jax.config.update('jax_log_compiles', True)
     jax.config.update('jax_enable_x64', True)
 
-    assert exploration in ['optimistic', 'mean', 'ocorl',
+    assert exploration in ['optimistic', 'mean', 'hucrl',
                            'pets'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean' or 'ocorl'"
     assert regression_model in ['probabilistic_ensemble', 'deterministic_ensemble', 'deterministic_FSVGD', 'probabilistic_FSVGD', 'GP']
     assert reward_source in ['dm-control', 'gym']
@@ -77,6 +78,7 @@ def experiment(
                   num_episodes=num_episodes,
                   reward_source=reward_source,
                   bnn_steps=bnn_steps,
+                  predict_difference=predict_difference,
                   first_episode_for_policy_training=first_episode_for_policy_training,
                   exploration=exploration,
                   reset_statistical_model=reset_statistical_model,
@@ -297,19 +299,19 @@ def experiment(
     
     agent_class = None
     if exploration == 'optimistic':
-        agent_class = ContinuousOptimisticModelBasedAgent
+        agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': False,
                                   'int_reward_weight': int_reward_weight,
                                   'sample_with_eps_std': sample_with_eps_std,
                                   }
-    elif exploration == 'ocorl':
-        agent_class = ContinuousOptimisticModelBasedAgent
+    elif exploration == 'hucrl':
+        agent_class = OptimisticModelBasedAgent
         additional_agent_kwarg = {'use_hallucinated_controls': True}
     elif exploration == 'pets':
-        agent_class = ContinuousPETSModelBasedAgent
+        agent_class = PETSModelBasedAgent
         additional_agent_kwarg = {}
     elif exploration == 'mean':
-        agent_class = ContinuousMeanModelBasedAgent
+        agent_class = MeanModelBasedAgent
         additional_agent_kwarg = {}
     else:
         raise ValueError(f"Invalid agent class: {agent_class}. Check exploration method, got: {exploration}")
@@ -366,7 +368,7 @@ def experiment(
         log_to_wandb=log_wandb,
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         first_episode_for_policy_training=first_episode_for_policy_training,
-        predict_difference=False,
+        predict_difference=predict_difference,
         reset_statistical_model=reset_statistical_model,
         save_trajectory_transitions=save_trajectory_transitions,
         dt=env.dt,
@@ -400,6 +402,7 @@ def main(args):
                reward_source=args.reward_source,
                num_episodes=args.num_episodes,
                bnn_steps=args.bnn_steps,
+               predict_difference=bool(args.predict_difference),
                first_episode_for_policy_training=args.first_episode_for_policy_training,
                exploration=args.exploration,
                reset_statistical_model=bool(args.reset_statistical_model),
@@ -427,7 +430,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--project_name', type=str, default='CT_Mountaincar')
+    parser.add_argument('--project_name', type=str, default='DT_Mountaincar')
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
@@ -437,8 +440,9 @@ if __name__ == '__main__':
     parser.add_argument('--reward_source', type=str, default='gym')
     parser.add_argument('--num_episodes', type=int, default=5)
     parser.add_argument('--bnn_steps', type=int, default=5_000)
+    parser.add_argument('--predict_difference', type=int, default=1)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'ocorl'], default='optimistic')
+    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'hucrl'], default='hucrl')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--beta', type=float, default=2.0)

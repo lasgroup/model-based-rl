@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Mountaincar_Feb18_18_00_Test_GPs_New_Beta_Int_Reward'
+PROJECT_NAME = 'DT_Mountaincar_Feb18_23_00_FirstTest'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -16,10 +16,11 @@ general_configs = {
     'reward_source': ['gym'],
     'num_episodes': [15],
     'bnn_steps': [15_000],
+    'predict_difference': [0, 1],
     'first_episode_for_policy_training': [0],
     'exploration': ['mean', 'ocorl', 'pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble','GP'],
+    'regression_model': ['GP'],
     'beta': [7.5, 10.],
     'weight_decay': [0.0],
     'int_rew_weight_init': [10.0],
@@ -67,7 +68,7 @@ def main():
                           num_cpus=1,
                           num_gpus=1,
                           mode='euler',
-                          duration='23:59:00',
+                          duration='3:59:00',
                           prompt=True,
                           mem=16000)
 
