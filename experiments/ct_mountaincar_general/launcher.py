@@ -1,16 +1,16 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Mountaincar_Feb18_14_00_Test_GPs_and_new_icem_params'
+PROJECT_NAME = 'CT_Mountaincar_Feb18_18_00_Test_GPs_New_Beta_Int_Reward'
 ENTITY = 'kiten'
 
 general_configs = {
-    'seed': list(range(1)),
+    'seed': list(range(5)),
     'project_name': [PROJECT_NAME],
     'entity': [ENTITY],
     'optimizer': ['icem'],
     'num_offline_samples': [0],
-    'num_online_samples': [50],
+    'num_online_samples': [200],
     'action_repeat': [2, 4],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
@@ -20,10 +20,10 @@ general_configs = {
     'exploration': ['mean', 'ocorl', 'pets'],
     'reset_statistical_model': [0],
     'regression_model': ['probabilistic_ensemble','GP'],
-    'beta': [2.0],
+    'beta': [7.5, 10.],
     'weight_decay': [0.0],
-    'int_rew_weight_init': [1.0],
-    'int_rew_weight_end': [0.0],
+    'int_rew_weight_init': [10.0],
+    'int_rew_weight_end': [10.0],
     'rew_decrease_steps': [10],
     'save_trajectory_transitions': [1],
 }
@@ -42,7 +42,7 @@ icem_configs = (
     {
         **general_configs,
         'optimizer': ['icem'],
-        'optimizer_horizon': [25],
+        'optimizer_horizon': [25, 50],
         'icem_num_steps': [5],
         'icem_colored_noise_exponent': [1.0],
         'icem_num_particles': [1],
