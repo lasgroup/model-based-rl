@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'CT_Mountaincar_Feb13_15_00_JAX_Recompiling'
+PROJECT_NAME = 'CT_Mountaincar_Feb18_14_00_Test_GPs_and_new_icem_params'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -10,16 +10,16 @@ general_configs = {
     'entity': [ENTITY],
     'optimizer': ['icem'],
     'num_offline_samples': [0],
-    'num_online_samples': [200],
-    'action_repeat': [2],
+    'num_online_samples': [50],
+    'action_repeat': [2, 4],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'num_episodes': [15],
     'bnn_steps': [15_000],
     'first_episode_for_policy_training': [0],
-    'exploration': ['mean'],
+    'exploration': ['mean', 'ocorl', 'pets'],
     'reset_statistical_model': [0],
-    'regression_model': ['probabilistic_ensemble'], # ,'GP'],
+    'regression_model': ['probabilistic_ensemble','GP'],
     'beta': [2.0],
     'weight_decay': [0.0],
     'int_rew_weight_init': [1.0],
@@ -32,7 +32,7 @@ sac_configs = (
     {
         **general_configs,
         'optimizer': ['sac'],
-        'train_steps_sac': [100_000, 500_000],
+        'train_steps_sac': [100_000],
     }
     if 'sac' in general_configs['optimizer']
     else None
@@ -43,8 +43,12 @@ icem_configs = (
         **general_configs,
         'optimizer': ['icem'],
         'optimizer_horizon': [25],
-        'icem_num_steps': [10],
+        'icem_num_steps': [5],
         'icem_colored_noise_exponent': [1.0],
+        'icem_num_particles': [1],
+        'icem_num_samples': [500],
+        'icem_num_elites': [100],
+        'icem_alpha': [0.2],
     }
     if 'icem' in general_configs['optimizer']
     else None

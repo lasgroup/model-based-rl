@@ -30,7 +30,11 @@ def experiment(
         train_steps_sac: int = 500,
         optimizer_horizon: int = 100,
         icem_num_steps: int = 10,
-        icem_colored_noise_exponent: float = 3.0
+        icem_colored_noise_exponent: float = 3.0,
+        icem_num_particles: int = 10,
+        icem_num_samples: int = 500,
+        icem_num_elites: int = 50,
+        icem_alpha: float = 0.2
         ):
     
     import chex
@@ -48,8 +52,9 @@ def experiment(
     from mbpo.optimizers import SACOptimizer, iCemParams, iCEMOptimizer
     from mbpo.systems.rewards.base_rewards import Reward, RewardParams
     from mbrl.envs.mountaincar import MountainCar
-    from optax import linear_schedule
+    from optax import linear_schedule, constant_schedule
     from mbrl.model_based_agent import ContinuousPETSModelBasedAgent, ContinuousOptimisticModelBasedAgent, ContinuousMeanModelBasedAgent
+    from mbrl.utils.gps import ARD
     # from mbrl.model_based_agent.base_agent_wrapper import MultiEnvEvaluatorWrapper
 
     log_wandb = True
@@ -98,7 +103,11 @@ def experiment(
             optimizer='icem',
             optimizer_horizon=optimizer_horizon,
             icem_num_steps=icem_num_steps,
-            icem_colored_noise_exponent=icem_colored_noise_exponent
+            icem_colored_noise_exponent=icem_colored_noise_exponent,
+            icem_num_particles=icem_num_particles,
+            icem_num_samples=icem_num_samples,
+            icem_num_elites=icem_num_elites,
+            icem_alpha=icem_alpha
         )
 
     int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
@@ -193,13 +202,16 @@ def experiment(
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
-            input_dim=env.observation_size + env.action_size,
-            output_dim=env.observation_size,
-            output_stds=1e-3 * jnp.ones(env.observation_size),
-            f_norm_bound=1.0,
-            delta=0.1,
-            num_training_steps=1000,
-        )
+        kernel=ARD(input_dim=env.observation_size + env.action_size, length_scale=0.1),
+        input_dim=env.observation_size + env.action_size,
+        output_dim=env.observation_size,
+        output_stds=1e-3 * jnp.ones(shape=(env.observation_size,)),
+        logging_wandb=log_wandb,
+        beta=jnp.ones(env.observation_size) * beta,
+        num_training_steps=constant_schedule(1_000),
+        lr_rate=1e-2,
+        weight_decay=1e-3,
+    )
     else:
         raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble', 'deterministic_ensemble' or 'GP'.")
 
@@ -265,6 +277,10 @@ def experiment(
         
     elif optimizer == 'icem':
         opt_params = iCemParams(
+            num_particles=icem_num_particles,
+            num_samples=icem_num_samples,
+            num_elites=icem_num_elites,
+            alpha=icem_alpha,
             num_steps=icem_num_steps,
             exponent=icem_colored_noise_exponent,
             )
@@ -401,7 +417,11 @@ def main(args):
                train_steps_sac=args.train_steps_sac,
                optimizer_horizon=args.optimizer_horizon,
                icem_num_steps=args.icem_num_steps,
-               icem_colored_noise_exponent=args.icem_colored_noise_exponent
+               icem_colored_noise_exponent=args.icem_colored_noise_exponent,
+               icem_num_particles=args.icem_num_particles,
+               icem_num_samples=args.icem_num_samples,
+               icem_num_elites=args.icem_num_elites,
+               icem_alpha=args.icem_alpha,
     )
 
 if __name__ == '__main__':
@@ -420,7 +440,7 @@ if __name__ == '__main__':
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
     parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'ocorl'], default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
-    parser.add_argument('--regression_model', type=str, default='probabilistic_ensemble')
+    parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--beta', type=float, default=2.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
@@ -437,6 +457,10 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer_horizon', type=int, default=100)
     parser.add_argument('--icem_num_steps', type=int, default=10)
     parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+    parser.add_argument('--icem_num_particles', type=int, default=1)
+    parser.add_argument('--icem_num_samples', type=int, default=500)
+    parser.add_argument('--icem_num_elites', type=int, default=100)
+    parser.add_argument('--icem_alpha', type=float, default=0.2)
 
     args = parser.parse_args()
     main(args)

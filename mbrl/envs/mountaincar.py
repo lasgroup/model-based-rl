@@ -8,8 +8,19 @@ import jax.random as jr
 from jaxtyping import Float, Array
 from functools import partial
 import copy
+from distrax import Distribution
+from distrax import Normal
+from typing import Tuple
+from mbpo.systems.base_systems import System, SystemParams, SystemState
+from mbpo.systems.dynamics.base_dynamics import Dynamics
+from mbpo.systems.rewards.base_rewards import Reward
+from mbpo.systems import DynamicsParams, RewardParams
+import time
+import matplotlib.pyplot as plt
+
 
 from mbrl.utils.tolerance_reward import ToleranceReward
+from mbpo.optimizers.trajectory_optimizers.icem_optimizer import iCemParams, iCemTO
 from gym.envs.classic_control.continuous_mountain_car import Continuous_MountainCarEnv
 
 @chex.dataclass
@@ -285,8 +296,157 @@ def test_mountain_car_vmap():
     assert jnp.all(done_flags), "Some environments did not reach the goal!"
     print(f"✅ All {num_envs} Mountain Car instances reached the goal!")
 
+class DummyDynamics(Dynamics):
+    def __init__(self, x_dim, u_dim):
+        super().__init__(x_dim=x_dim, u_dim=u_dim)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        return Normal(0, 0.01), dynamics_params
+
+    def init_params(self, key: chex.PRNGKey) -> DynamicsParams:
+        return 0
+
+
+class DummyReward(Reward):
+    def __init__(self, x_dim, u_dim):
+        super().__init__(x_dim, u_dim)
+
+    def init_params(self, key: chex.PRNGKey) -> RewardParams:
+        return 0
+
+    def __call__(self,
+                 x: chex.Array,
+                 u: chex.Array,
+                 reward_params: RewardParams,
+                 x_next: chex.Array | None = None) -> Tuple[Distribution, RewardParams]:
+        return Normal(0, 0.01), reward_params
+
+
+class MCSystem(System):
+    def __init__(self, reward_source: str = 'gym', margin_factor: float = 100.0):
+        super().__init__(dynamics=DummyDynamics(x_dim=2, u_dim=1),
+                         reward=DummyReward(x_dim=2, u_dim=1))
+        self.brax_env = MountainCar()
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: SystemParams[DynamicsParams, RewardParams],
+             ) -> SystemState:
+        """
+
+        :param x: current state of the system
+        :param u: current action of the system
+        :param system_params: parameters of the system
+        :return: Tuple of next state, reward, updated system parameters
+        """
+        state = State(pipeline_state=x,
+                      obs=x,
+                      reward=jnp.array(0.0),
+                      done=jnp.array(0.0), 
+                      info = {'derivative': jnp.array([0.0, 0.0]),
+                        't': jnp.array(0.0),
+                        'dt': jnp.array(self.brax_env.dt)})
+
+        next_state = self.brax_env.step(state, u)
+        next_system_state = SystemState(x_next=next_state.obs,
+                                        reward=next_state.reward,
+                                        system_params=system_params,
+                                        done=next_state.done)
+
+        return next_system_state
+
+class ActionRepeatWrapper(System):
+    def __init__(self,
+                 action_repeat: int,
+                 system: System):
+        super().__init__(dynamics=system.dynamics,
+                         reward=system.reward)
+        self.action_repeat = action_repeat
+        self.system = system
+
+    def step(self,
+             x: chex.Array,
+             u: chex.Array,
+             system_params: SystemParams[DynamicsParams, RewardParams],
+             ) -> SystemState:
+        total_reward = 0.0
+        for _ in range(action_repeat):
+            sys_state = self.system.step(x, u, system_params)
+            x, reward, system_params = sys_state.x_next, sys_state.reward, sys_state.system_params
+            total_reward += reward
+        sys_state = sys_state.replace(reward=total_reward)
+        return sys_state
 
 if __name__ == "__main__":
+    action_repeat = 4
+    horizon = 25
+    safe_exploration = True
+
+    cost_fn = None
+
+    optimizer = iCemTO(
+        horizon=horizon,
+        action_dim=1,
+        key=jr.PRNGKey(0),
+        opt_params=iCemParams(exponent=1.0,
+                              num_samples=500,
+                              alpha=0.2,
+                              num_steps=5,
+                              num_particles=1, ),
+        system=ActionRepeatWrapper(action_repeat=action_repeat, system=MCSystem()),
+        cost_fn=cost_fn,
+    )
+
+    system = MCSystem()
+
+    optimizer_state = optimizer.init(key=jr.PRNGKey(1))
+    system_params = system.init_params(key=jr.PRNGKey(2))
+    obs = jnp.array([-0.5, 0.0])
+
+    all_obs = []
+    all_actions = []
+    all_rewards = []
+
+    times = []
+
+    for i in range(200 // action_repeat):
+        start_time = time.time()
+        action, optimizer_state = optimizer.act(obs, optimizer_state)
+        total_reward = 0
+        for _ in range(action_repeat):
+            sys_state = system.step(obs, action, system_params)
+            obs, reward, system_params = sys_state.x_next, sys_state.reward, sys_state.system_params
+            total_reward += reward
+        all_obs.append(obs)
+        all_actions.append(action)
+        all_rewards.append(total_reward)
+        end_time = time.time()
+        times.append(end_time - start_time)
+
+    fig, axs = plt.subplots(1, 4, figsize=(8, 2))
+    axs[0].plot(all_obs)
+    axs[0].set_title('Observation')
+    axs[1].plot(all_actions)
+    axs[1].set_title('Action')
+    axs[2].plot(all_rewards)
+    axs[2].set_title('Reward')
+    axs[3].plot(times[2:])
+    axs[3].set_title('Time')
+    plt.tight_layout()
+    plt.show()
+
+    print(f'Maximal velocity value: {jnp.max(jnp.stack(all_obs)[:, -1])}')
+    print(f'Minimal velocity value: {jnp.min(jnp.stack(all_obs)[:, -1])}')
+
+    import numpy as np
+
+    total_reward = np.sum(np.array(all_rewards))
+    print(f'Total reward: {total_reward}')
+
     test_mountain_car_termination()
     test_mountain_car_reaches_goal()
     test_mountain_car_vmap()
