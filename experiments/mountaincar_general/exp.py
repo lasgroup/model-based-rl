@@ -56,7 +56,7 @@ def experiment(
     from optax import linear_schedule, constant_schedule
     from mbrl.model_based_agent import PETSModelBasedAgent, OptimisticModelBasedAgent, MeanModelBasedAgent
     from mbrl.utils.gps import ARD
-    # from mbrl.model_based_agent.base_agent_wrapper import MultiEnvEvaluatorWrapper
+    from mbrl.model_based_agent.base_agent_wrapper import DiscreteMultiEnvEvaluatorWrapper
 
     log_wandb = True
     # jax.config.update('jax_log_compiles', True)
@@ -333,7 +333,6 @@ def experiment(
 
             if self.reward_source == 'gym':
                 action_penalty = -self.env.reward_params.control_cost * (u**2)
-                
                 terminated = jnp.logical_and(
                         position >= self.env.reward_params.target_position, 
                         velocity >= self.env.reward_params.target_velocity)
@@ -377,13 +376,13 @@ def experiment(
     )
 
     # Wrap the agent with multiple evaluation environments
-    # wrapped_agent = MultiEnvEvaluatorWrapper(agent, eval_envs, reward_model_list)
+    wrapped_agent = DiscreteMultiEnvEvaluatorWrapper(agent, eval_envs, reward_model_list)
 
     # Run training episodes with multi-environment evaluation
-    # agent_state, actors_for_reward_models = wrapped_agent.run_episodes(num_episodes=num_episodes, start_from_scratch=True, key=key_agent)
-    agent_state = agent.run_episodes(num_episodes=num_episodes,
-                                      start_from_scratch=True,
-                                      key=key_agent)
+    agent_state, actors_for_reward_models = wrapped_agent.run_episodes(num_episodes=num_episodes, start_from_scratch=True, key=key_agent)
+    # agent_state = agent.run_episodes(num_episodes=num_episodes,
+    #                                  start_from_scratch=True,
+    #                                  key=key_agent)
 
 
     print("Finishing wandb")
