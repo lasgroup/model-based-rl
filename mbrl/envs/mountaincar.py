@@ -81,6 +81,7 @@ class MountainCar(Env):
                 't': jnp.array(0.0),
                 'dt': jnp.array(self.dt),
                 'noise_key': self.init_noise_key}
+        """
         if self.init_noise_key is not None:
             raise NotImplementedError()
             # return self.env.reset()
@@ -92,6 +93,9 @@ class MountainCar(Env):
             initial_position = jax.random.uniform(subkey, shape=(), minval=-0.6, maxval=-0.4)
 
         initial_state = jnp.array([initial_position, 0.0])
+        """
+        initial_state = jnp.array([-0.5, 0.0])
+        
         return State(
             pipeline_state=initial_state,
             obs=initial_state,
@@ -405,7 +409,11 @@ if __name__ == "__main__":
 
     optimizer_state = optimizer.init(key=jr.PRNGKey(1))
     system_params = system.init_params(key=jr.PRNGKey(2))
-    obs = jnp.array([-0.5, 0.0])
+    # obs = jnp.array([-0.5, 0.0])
+    key, reset_key = jax.random.split(jr.PRNGKey(69))
+    initial_position = jax.random.uniform(reset_key, shape=(), minval=-0.6, maxval=-0.4)
+    initial_state = system.brax_env.reset(reset_key)
+    obs = initial_state.obs
 
     all_obs = []
     all_actions = []

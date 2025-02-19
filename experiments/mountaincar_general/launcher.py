@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb18_23_00_FirstTest'
+PROJECT_NAME = 'DT_Mountaincar_Feb19_15_30_FirstTest'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -11,23 +11,25 @@ general_configs = {
     'optimizer': ['icem'],
     'num_offline_samples': [0],
     'num_online_samples': [200],
-    'action_repeat': [2, 4],
+    'action_repeat': [4],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
     'num_episodes': [15],
     'bnn_steps': [15_000],
     'predict_difference': [0, 1],
     'first_episode_for_policy_training': [0],
-    'exploration': ['mean', 'ocorl', 'pets'],
+    'exploration': ['optimistic'],
     'reset_statistical_model': [0],
     'regression_model': ['GP'],
-    'beta': [7.5, 10.],
+    'beta': [7.5],
     'weight_decay': [0.0],
     'int_rew_weight_init': [10.0],
     'int_rew_weight_end': [10.0],
     'rew_decrease_steps': [10],
     'save_trajectory_transitions': [1],
 }
+
+print("WARNING: Random initialization of env state disabled")
 
 sac_configs = (
     {
