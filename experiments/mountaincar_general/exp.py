@@ -23,6 +23,7 @@ def experiment(
         int_rew_weight_end: float = 0.0,
         rew_decrease_steps: int = 20,
         sample_with_eps_std: bool = False,
+        normalize_int_reward: bool = False,
         env_name: str = 'swing-up',
         eval_env_name: str = 'swing-up',
         eval_env_names: list[str] = ['swing-up'],
@@ -89,6 +90,7 @@ def experiment(
                   int_rew_weight_end=int_rew_weight_end,
                   rew_decrease_steps=rew_decrease_steps,
                   sample_with_eps_std=sample_with_eps_std,
+                  normalize_int_reward=normalize_int_reward,
                   env=env_name,
                   eval_env=eval_env_names,
                   save_trajectory_transitions=save_trajectory_transitions,
@@ -303,6 +305,7 @@ def experiment(
         additional_agent_kwarg = {'use_hallucinated_controls': False,
                                   'int_reward_weight': int_reward_weight,
                                   'sample_with_eps_std': sample_with_eps_std,
+                                  'normalize_int_reward': normalize_int_reward,
                                   }
     elif exploration == 'hucrl':
         agent_class = OptimisticModelBasedAgent
@@ -441,7 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--bnn_steps', type=int, default=5_000)
     parser.add_argument('--predict_difference', type=int, default=1)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=-1)
-    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'hucrl'], default='hucrl')
+    parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'hucrl'], default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='GP')
     parser.add_argument('--beta', type=float, default=2.0)

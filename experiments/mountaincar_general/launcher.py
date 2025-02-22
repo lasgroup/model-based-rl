@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb19_15_30_FirstTest'
+PROJECT_NAME = 'DT_Mountaincar_Feb22_23_30_DontNormalize'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -16,7 +16,7 @@ general_configs = {
     'reward_source': ['gym'],
     'num_episodes': [15],
     'bnn_steps': [15_000],
-    'predict_difference': [0, 1],
+    'predict_difference': [1],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic'],
     'reset_statistical_model': [0],
