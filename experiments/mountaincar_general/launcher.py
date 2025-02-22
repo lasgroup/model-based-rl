@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb22_23_30_DontNormalize'
+PROJECT_NAME = 'DT_Mountaincar_Feb22_23_55_iCEM_No_Optimism'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -30,6 +30,7 @@ general_configs = {
 }
 
 print("WARNING: Random initialization of env state disabled")
+print("WARNING: Optimism in iCEM disabled (DEBUGGING)")
 
 sac_configs = (
     {

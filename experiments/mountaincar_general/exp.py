@@ -292,6 +292,8 @@ def experiment(
         optimizer = iCEMOptimizer(horizon=optimizer_horizon,
                                   key = jr.PRNGKey(seed),
                                   opt_params=opt_params,
+                                  use_optimism=False,
+                                  use_pessimism=False, 
                                   )
 
     if log_wandb:
