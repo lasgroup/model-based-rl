@@ -499,11 +499,13 @@ class OptimisticExplorationDynamics(PetsExplorationDynamics, Generic[ModelState]
 class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
     def __init__(self,
                  sample_with_eps_std: bool = True,
+                 normalize_int_reward: bool = True,
                  *args,
                  **kwargs
                  ):
         super().__init__(*args, **kwargs)
         self.sample_with_eps_std = int(sample_with_eps_std)
+        self.normalize_int_reward = normalize_int_reward
 
     def next_state(self,
                    x: chex.Array,
@@ -516,9 +518,13 @@ class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
         model_output = self.statistical_model(input=z,
                                               statistical_model_state=dynamics_params.statistical_model_state)
         scale_std = model_output.epistemic_std * self.sample_with_eps_std
-        # Use normalized (scale-invariant) disagreement
-        int_reward = jnp.linalg.norm(model_output.epistemic_std /
-                                     dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
+
+        if self.normalize_int_reward:
+            # Use normalized (scale-invariant) disagreement
+            int_reward = jnp.linalg.norm(model_output.epistemic_std /
+                                        dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
+        else:
+            int_reward = jnp.linalg.norm(model_output.epistemic_std)
         x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
         x_next = x_next_dist.sample(seed=key_sample_x_next)
         if self.predict_difference:

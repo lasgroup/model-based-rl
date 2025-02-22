@@ -15,6 +15,7 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
                  use_hallucinated_controls: bool = True,
                  int_reward_weight: Union[float, optax.Schedule] = 1.0,
                  sample_with_eps_std: bool = False,
+                 normalize_int_reward: bool = False,
                  *args, **kwargs):
         self.use_hallucinated_controls = use_hallucinated_controls
         if isinstance(int_reward_weight, float):
@@ -26,6 +27,7 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
             f'intrinsic reward weight is ignored when use hallucination controls is true.'
         )
         self.sample_with_eps_std = sample_with_eps_std
+        self.normalize_int_reward = normalize_int_reward
         super().__init__(*args, **kwargs)
 
     def prepare_actor(self,
@@ -50,6 +52,7 @@ class OptimisticModelBasedAgent(BaseModelBasedAgent):
                                 u_dim=self.env.action_size,
                                 predict_difference=self.predict_difference,
                                 sample_with_eps_std=self.sample_with_eps_std,
+                                normalize_int_reward=self.normalize_int_reward,
                                 )
             system = system(dynamics=dynamics,
                             reward=self.reward_model,
