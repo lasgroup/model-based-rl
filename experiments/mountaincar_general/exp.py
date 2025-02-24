@@ -453,7 +453,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
     parser.add_argument('--int_rew_weight_end', type=float, default=0.1)
-    parser.add_argument('--rew_decrease_steps', type=int, default=20)
+    parser.add_argument('--rew_decrease_steps', type=int, default=-1)
     parser.add_argument('--env', type=str, default='swing-up')
     parser.add_argument('--eval_env', type=str, default='swing-up')
     parser.add_argument('--eval_envs', nargs='+', default=['swing-up','balance'], help="List of evaluation environments") 

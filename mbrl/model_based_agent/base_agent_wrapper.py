@@ -12,6 +12,8 @@ from datetime import datetime
 import wandb
 import copy
 import chex
+import os
+import pickle
 from brax.envs import Env as BraxEnv
 import jax.random as jr
 
@@ -201,6 +203,14 @@ class DiscreteMultiEnvEvaluatorWrapper:
                     wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
+                if self.agent.save_trajectory_transitions and self.agent.log_to_wandb:
+                    directory = os.path.join(wandb.run.dir, f'evalutation_task_{i}')
+                    if not os.path.exists(directory):
+                        os.makedirs(directory)
+                    model_path = os.path.join(directory, f'episode_{episode_idx}_task_{i}_trajectory.pkl')
+                    with open(model_path, 'wb') as handle:
+                        pickle.dump(data, handle)
+                    wandb.save(model_path, wandb.run.dir)
         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End with evaluating on downstream tasks")
 
         return agent_state, actors_for_reward_models
@@ -412,6 +422,14 @@ class MultiEnvEvaluatorWrapper:
                     wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
+                if self.agent.save_trajectory_transitions and self.agent.log_to_wandb:
+                    directory = os.path.join(wandb.run.dir, f'evalutation_task_{i}')
+                    if not os.path.exists(directory):
+                        os.makedirs(directory)
+                    model_path = os.path.join(directory, f'episode_{episode_idx}_task_{i}_trajectory.pkl')
+                    with open(model_path, 'wb') as handle:
+                        pickle.dump(data, handle)
+                    wandb.save(model_path, wandb.run.dir)
         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - End with evaluating on downstream tasks")
 
         return agent_state, actors_for_reward_models

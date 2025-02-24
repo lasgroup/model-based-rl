@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb22_23_55_iCEM_No_Optimism'
+PROJECT_NAME = 'DT_Mountaincar_Feb24_13_25_Save_Trajectories'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -21,11 +21,11 @@ general_configs = {
     'exploration': ['optimistic'],
     'reset_statistical_model': [0],
     'regression_model': ['GP'],
-    'beta': [7.5],
+    'beta': [0.],
     'weight_decay': [0.0],
-    'int_rew_weight_init': [10.0],
-    'int_rew_weight_end': [10.0],
-    'rew_decrease_steps': [10],
+    'int_rew_weight_init': [0, 1.0, 10.0, 100.0],
+    'int_rew_weight_end': [0.0],
+    'rew_decrease_steps': [-1],
     'save_trajectory_transitions': [1],
 }
 
@@ -46,7 +46,7 @@ icem_configs = (
     {
         **general_configs,
         'optimizer': ['icem'],
-        'optimizer_horizon': [25, 50],
+        'optimizer_horizon': [50],
         'icem_num_steps': [5],
         'icem_colored_noise_exponent': [1.0],
         'icem_num_particles': [1],
