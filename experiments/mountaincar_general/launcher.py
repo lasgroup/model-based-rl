@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb24_13_25_Save_Trajectories'
+PROJECT_NAME = 'DT_Mountaincar_Feb24_17_15_Reset_Stat_Model'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -19,7 +19,7 @@ general_configs = {
     'predict_difference': [1],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic'],
-    'reset_statistical_model': [0],
+    'reset_statistical_model': [1],
     'regression_model': ['GP'],
     'beta': [0.],
     'weight_decay': [0.0],

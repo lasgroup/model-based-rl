@@ -222,7 +222,7 @@ def experiment(
 
     discount_factor = 0.99
 
-    max_replay_size_true_data_buffer = 10 ** 4
+    max_replay_size_true_data_buffer = 10 ** 3
 
     extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (env.observation_size, 1, 1)
