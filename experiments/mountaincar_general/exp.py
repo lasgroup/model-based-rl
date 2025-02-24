@@ -206,15 +206,14 @@ def experiment(
         )
     elif regression_model == 'GP':
         model = GPStatisticalModel(
-        kernel=ARD(input_dim=env.observation_size + env.action_size, length_scale=0.1),
-        input_dim=env.observation_size + env.action_size,
-        output_dim=env.observation_size,
-        output_stds=1e-3 * jnp.ones(shape=(env.observation_size,)),
-        logging_wandb=log_wandb,
-        beta=jnp.ones(env.observation_size) * beta,
-        num_training_steps=constant_schedule(1_000),
-        lr_rate=1e-2,
-        weight_decay=1e-3,
+            kernel=ARD(input_dim=env.observation_size + env.action_size),
+            input_dim=env.observation_size + env.action_size,
+            output_dim=env.observation_size,
+            output_stds=1e-3 * jnp.ones(shape=(env.observation_size,)),
+            logging_wandb=False,
+            f_norm_bound=3 * jnp.ones(shape=(env.observation_size,)),
+            beta=None,
+            num_training_steps=constant_schedule(1000)
     )
     else:
         raise ValueError(f"Invalid regression model: {regression_model}. Expected 'probabilistic_ensemble', 'deterministic_ensemble' or 'GP'.")

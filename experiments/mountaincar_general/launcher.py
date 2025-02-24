@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb24_17_15_Reset_Stat_Model'
+PROJECT_NAME = 'DT_Mountaincar_Feb24_17_50_GP_Anpassen'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -14,16 +14,16 @@ general_configs = {
     'action_repeat': [4],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
-    'num_episodes': [15],
+    'num_episodes': [20],
     'bnn_steps': [15_000],
     'predict_difference': [1],
     'first_episode_for_policy_training': [0],
     'exploration': ['optimistic'],
-    'reset_statistical_model': [1],
+    'reset_statistical_model': [0],
     'regression_model': ['GP'],
     'beta': [0.],
     'weight_decay': [0.0],
-    'int_rew_weight_init': [0, 1.0, 10.0, 100.0],
+    'int_rew_weight_init': [0, 1.0, 10.0],
     'int_rew_weight_end': [0.0],
     'rew_decrease_steps': [-1],
     'save_trajectory_transitions': [1],
@@ -46,7 +46,7 @@ icem_configs = (
     {
         **general_configs,
         'optimizer': ['icem'],
-        'optimizer_horizon': [50],
+        'optimizer_horizon': [25,50],
         'icem_num_steps': [5],
         'icem_colored_noise_exponent': [1.0],
         'icem_num_particles': [1],
