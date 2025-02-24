@@ -222,7 +222,7 @@ def experiment(
 
     discount_factor = 0.99
 
-    max_replay_size_true_data_buffer = 10 ** 3
+    max_replay_size_true_data_buffer = 10 ** 4
 
     extra_fields = ('derivative', 't', 'dt')
     extra_fields_shape = (env.observation_size, 1, 1)
@@ -438,7 +438,7 @@ if __name__ == '__main__':
     parser.add_argument('--entity', type=str, default='kiten')
     parser.add_argument('--num_offline_samples', type=int, default=0)
     parser.add_argument('--num_online_samples', type=int, default=200)
-    parser.add_argument('--action_repeat', type=int, default=1)
+    parser.add_argument('--action_repeat', type=int, default=4)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--noise_level', type=float, nargs=2, default=[0.1, 0.1])
     parser.add_argument('--reward_source', type=str, default='gym')
@@ -449,9 +449,9 @@ if __name__ == '__main__':
     parser.add_argument('--exploration', type=str, choices=['optimistic', 'pets', 'mean', 'hucrl'], default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='GP')
-    parser.add_argument('--beta', type=float, default=2.0)
+    parser.add_argument('--beta', type=float, default=0.0)
     parser.add_argument('--weight_decay', type=float, default=0.0)
-    parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_init', type=float, default=10.0)
     parser.add_argument('--int_rew_weight_end', type=float, default=0.1)
     parser.add_argument('--rew_decrease_steps', type=int, default=-1)
     parser.add_argument('--env', type=str, default='swing-up')
@@ -462,9 +462,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--optimizer', type=str, choices=['sac','icem'], default='icem')
     parser.add_argument('--train_steps_sac', type=int, default=50_000)
-    parser.add_argument('--optimizer_horizon', type=int, default=100)
-    parser.add_argument('--icem_num_steps', type=int, default=10)
-    parser.add_argument('--icem_colored_noise_exponent', type=float, default=3.0)
+    parser.add_argument('--optimizer_horizon', type=int, default=50)
+    parser.add_argument('--icem_num_steps', type=int, default=5)
+    parser.add_argument('--icem_colored_noise_exponent', type=float, default=1.0)
     parser.add_argument('--icem_num_particles', type=int, default=1)
     parser.add_argument('--icem_num_samples', type=int, default=500)
     parser.add_argument('--icem_num_elites', type=int, default=100)
