@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb25_17_30_Intrinsic_Reward_Norm'
+PROJECT_NAME = 'DT_Mountaincar_Feb25_17_40_Intrinsic_Reward_Norm_Higher_CCost'
 ENTITY = 'kiten'
 
 general_configs = {
