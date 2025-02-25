@@ -25,7 +25,7 @@ from gym.envs.classic_control.continuous_mountain_car import Continuous_Mountain
 
 @chex.dataclass
 class MountainCarRewardParams:
-    control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.1))
+    control_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(0.01))
     angle_cost: chex.Array = struct.field(default_factory=lambda: jnp.array(1.0))
     target_position: chex.Array = struct.field(
         default_factory=lambda: jnp.array(0.45) # was 0.5 in gym, 0.45 in Arnaud de Broissia's version

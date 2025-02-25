@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb24_17_50_GP_Anpassen'
+PROJECT_NAME = 'DT_Mountaincar_Feb25_17_20_Higher_Num_Steps'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -14,7 +14,7 @@ general_configs = {
     'action_repeat': [4],
     'deterministic_policy_for_data_collection': [0],
     'reward_source': ['gym'],
-    'num_episodes': [20],
+    'num_episodes': [15],
     'bnn_steps': [15_000],
     'predict_difference': [1],
     'first_episode_for_policy_training': [0],
@@ -31,6 +31,7 @@ general_configs = {
 
 print("WARNING: Random initialization of env state disabled")
 print("WARNING: Optimism in iCEM disabled (DEBUGGING)")
+print("WARNING: Custom Control Cost in MountainCar env")
 
 sac_configs = (
     {
@@ -46,8 +47,8 @@ icem_configs = (
     {
         **general_configs,
         'optimizer': ['icem'],
-        'optimizer_horizon': [25,50],
-        'icem_num_steps': [5],
+        'optimizer_horizon': [25, 50],
+        'icem_num_steps': [5, 10, 15],
         'icem_colored_noise_exponent': [1.0],
         'icem_num_particles': [1],
         'icem_num_samples': [500],
