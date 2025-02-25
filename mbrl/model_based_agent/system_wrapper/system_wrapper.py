@@ -524,7 +524,8 @@ class OMBRLDynamics(PetsDynamics, Generic[ModelState]):
             int_reward = jnp.linalg.norm(model_output.epistemic_std /
                                         dynamics_params.statistical_model_state.model_state.data_stats.outputs.std)
         else:
-            int_reward = jnp.linalg.norm(model_output.epistemic_std)
+            # int_reward = jnp.linalg.norm(model_output.epistemic_std)
+            int_reward = jnp.sum(model_output.epistemic_std)
         x_next_dist = Normal(loc=model_output.mean, scale=scale_std)
         x_next = x_next_dist.sample(seed=key_sample_x_next)
         if self.predict_difference:

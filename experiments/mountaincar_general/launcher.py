@@ -1,7 +1,7 @@
 import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
-PROJECT_NAME = 'DT_Mountaincar_Feb25_17_20_Higher_Num_Steps'
+PROJECT_NAME = 'DT_Mountaincar_Feb25_17_30_Intrinsic_Reward_Norm'
 ENTITY = 'kiten'
 
 general_configs = {
@@ -23,7 +23,7 @@ general_configs = {
     'regression_model': ['GP'],
     'beta': [0.],
     'weight_decay': [0.0],
-    'int_rew_weight_init': [0, 1.0, 10.0],
+    'int_rew_weight_init': [0, 1.0, 5.0, 10.0],
     'int_rew_weight_end': [0.0],
     'rew_decrease_steps': [-1],
     'save_trajectory_transitions': [1],
@@ -32,6 +32,7 @@ general_configs = {
 print("WARNING: Random initialization of env state disabled")
 print("WARNING: Optimism in iCEM disabled (DEBUGGING)")
 print("WARNING: Custom Control Cost in MountainCar env")
+print("WARNING: Intrinsic Reward Computation with NORM")
 
 sac_configs = (
     {
@@ -48,7 +49,7 @@ icem_configs = (
         **general_configs,
         'optimizer': ['icem'],
         'optimizer_horizon': [25, 50],
-        'icem_num_steps': [5, 10, 15],
+        'icem_num_steps': [5],
         'icem_colored_noise_exponent': [1.0],
         'icem_num_particles': [1],
         'icem_num_samples': [500],
