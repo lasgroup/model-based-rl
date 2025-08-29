@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['WTC_Pendulum_May10_11_00'],
+    'project_name': ['WTC_Pendulum_Aug_29_18_00'],
     'num_offline_samples': [0, ],
     'sac_horizon': [100, ],
     'deterministic_policy_for_data_collection': [0, 1, ],
@@ -16,10 +16,10 @@ general_configs = {
     'exploration': ['optimistic', 'pets', 'mean'],
     'reset_statistical_model': [1],
     'regression_model': ['FSVGD', ],
-    'max_time_factor': [5, 15],
+    'max_time_factor': [5],
     'beta_factor': [2.0],
     'horizon': [200],
-    'transition_cost': [0.1, 1.0]
+    'transition_cost': [0.1]
 }
 
 

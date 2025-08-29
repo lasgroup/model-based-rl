@@ -2,7 +2,7 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 general_configs = {
-    'project_name': ['WTC_RCCar_May19_11_43'],
+    'project_name': ['WTC_RCCar_Aug_29_18_00'],
     'num_offline_samples': [0],
     'sac_horizon': [100],
     'deterministic_policy_for_data_collection': [0],
