@@ -297,6 +297,77 @@ class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
             aleatoric_std = 0 * aleatoric_std
 
         return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
+    
+
+class WtsScCombrlDynamics(WtsScPetsDynamics, Generic[ModelState]):
+    def __init__(self, use_log: bool = True, scale_with_aleatoric_std: bool = True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_log = use_log
+        self.scale_with_aleatoric_std = scale_with_aleatoric_std
+
+    def get_intrinsic_reward(self, epistemic_std: chex.Array, aleatoric_std: chex.Array) -> chex.Array:
+        if self.scale_with_aleatoric_std:
+            # sigma^2_ep / sigma^2_al
+            intrinsic_reward = jnp.square(epistemic_std / jnp.clip(aleatoric_std, a_min=1e-4))
+        else:
+            # sigma^2_ep
+            intrinsic_reward = jnp.square(epistemic_std)
+        if self.use_log:
+            # use log transform
+            intrinsic_reward = jnp.log(1 + intrinsic_reward)
+        # sum over the state axis
+        return jnp.sum(intrinsic_reward, axis=0)
+
+    def next_state(self,
+                   x: chex.Array,
+                   u: chex.Array,
+                   dynamics_params: DynamicsParams) -> Tuple[Distribution, DynamicsParams]:
+        assert x.shape == (self.x_dim,) and u.shape == (self.u_dim,)
+        # env_state, env_time = x[:-1], x[-1]
+        # env_action, pseudo_time_for_action = u[:-1], u[-1]
+        env_state, env_time = x[:-1], x[-1]
+        env_action, pseudo_time_for_action = u[:-1], u[-1]
+        # Now we transform pseudo_time_for_action to time for action
+        time_for_action = self.pseudo_to_real_time(pseudo_time_for_action,
+                                                   dt=self.dt,
+                                                   t_min=self.min_time_between_switches,
+                                                   t_max=self.max_time_between_switches,
+                                                   env_time=env_time,
+                                                   episode_time=self.episode_time)
+        # Prepare statistical model input
+        sm_input = jnp.concatenate([env_state, env_action, time_for_action[..., None]])
+        next_key, key_sample_x_next = jr.split(dynamics_params.key)
+
+        model_output = self.statistical_model(input=sm_input,
+                                              statistical_model_state=dynamics_params.statistical_model_state)
+        # dist for [system_state, reward]
+        env_state_next, integrated_reward = model_output.mean[:-1], model_output.mean[-1]
+        integrated_reward = jnp.clip(integrated_reward,
+                                     a_min=time_for_action * self.running_reward_min_bound,
+                                     a_max=time_for_action * self.running_reward_max_bound)
+
+        if self.predict_difference:
+            env_state_next = env_state + env_state_next
+
+        # what if this becomes negative (shouldn't since we take care for this above), just as safety
+        env_time_next = jnp.clip(env_time + time_for_action, a_min=0).reshape(1)
+        augmented_x_next = jnp.concatenate([env_state_next,
+                                            integrated_reward.reshape(1),
+                                            env_time_next,
+                                            ])
+        new_dynamics_params = dynamics_params.replace(key=next_key,
+                                                      statistical_model_state=model_output.statistical_model_state)
+        # Part of aleatoric uncertainty in time is equal to 0
+        aleatoric_std = jnp.concatenate([model_output.aleatoric_std[:-1],
+                                         model_output.aleatoric_std[-1].reshape(1, ),
+                                         jnp.zeros(shape=(1,)),
+                                         ])
+        if not self.aleatoric_noise_in_prediction:
+            aleatoric_std = 0 * aleatoric_std
+
+        return Normal(loc=augmented_x_next, scale=aleatoric_std), new_dynamics_params
+
+
 
 
 class OptimisticDynamics(PetsDynamics, Generic[ModelState]):
