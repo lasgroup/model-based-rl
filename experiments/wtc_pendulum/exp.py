@@ -22,7 +22,7 @@ from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
 from mbrl.utils.offline_data import WhenToControlWrapper
 
 log_wandb = True
-ENTITY = 'trevenl'
+ENTITY = 'kiten'
 
 
 def experiment(project_name: str = 'GPUSpeedTest',
@@ -83,6 +83,13 @@ def experiment(project_name: str = 'GPUSpeedTest',
                               max_time_between_switches=max_time_between_switches,
                               switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
                               time_as_part_of_state=True)
+    
+    eval_env = IHSwitchCostWrapper(PendulumEnv(reward_source='dm-control'),  # fresh base env
+                                   num_integrator_steps=horizon,
+                                   min_time_between_switches=min_time_between_switches,
+                                   max_time_between_switches=max_time_between_switches,
+                                   switch_cost=ConstantSwitchCost(value=jnp.array(transition_cost)),
+                                   time_as_part_of_state=True)
 
     episode_time = base_env.dt * horizon
 
@@ -235,7 +242,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
 
     agent = agent_class(
         env=env,
-        eval_env=env,
+        eval_env=eval_env,
         statistical_model=model,
         optimizer=optimizer,
         reward_model=TransitionReward(),
@@ -298,7 +305,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_bnn_steps', type=int, default=50_000)
     parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=0)
-    parser.add_argument('--exploration', type=str, default='optimistic')
+    parser.add_argument('--exploration', type=str, default='mean')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
     parser.add_argument('--max_time_factor', type=int, default=30)
