@@ -11,6 +11,7 @@ from bsm.bayesian_regression import ProbabilisticEnsemble, ProbabilisticFSVGDEns
 from bsm.statistical_model.bnn_statistical_model import BNNStatisticalModel
 from bsm.statistical_model.gp_statistical_model import GPStatisticalModel
 from distrax import Normal
+from optax import linear_schedule
 from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
@@ -18,7 +19,7 @@ from wtc.utils import discrete_to_continuous_discounting
 from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
 from mbrl.envs.pendulum import PendulumEnv
-from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic
+from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic, WtcCombrl
 from mbrl.utils.offline_data import WhenToControlWrapper
 
 log_wandb = True
@@ -43,9 +44,14 @@ def experiment(project_name: str = 'GPUSpeedTest',
                beta_factor: float = 2.0,
                horizon: int = 100,
                transition_cost: float = 0.1,
+               use_log: bool = False,
+               scale_with_aleatoric_std: bool = False,
+               int_rew_weight_init: float = 1.0,
+               int_rew_weight_end: float = 0.0,
+               rew_decrease_steps: int = 20,
                ):
-    assert exploration in ['optimistic', 'pets',
-                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'pets' or 'mean'"
+    assert exploration in ['optimistic', 'combrl', 'pets',
+                           'mean'], "Unrecognized exploration strategy, should be 'optimistic' or 'combrl' or 'pets' or 'mean'"
     assert regression_model in ['probabilistic_ensemble', 'FSVGD', 'GP']
 
     num_training_points = optax.linear_schedule(init_value=min_bnn_steps, end_value=max_bnn_steps,
@@ -66,7 +72,12 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   max_time_factor=max_time_factor,
                   beta_factor=beta_factor,
                   horizon=horizon,
-                  transition_cost=transition_cost
+                  transition_cost=transition_cost,
+                  use_log=use_log,
+                  scale_with_aleatoric_std=scale_with_aleatoric_std,
+                  int_rew_weight_init=int_rew_weight_init,
+                  int_rew_weight_end=int_rew_weight_end,
+                  rew_decrease_steps=rew_decrease_steps
                   )
 
     base_env = PendulumEnv(reward_source='dm-control')
@@ -235,10 +246,25 @@ def experiment(project_name: str = 'GPUSpeedTest',
     agent_class = None
     if exploration == 'optimistic':
         agent_class = WtcOptimistic
+        additional_agent_kwarg = {}
     elif exploration == 'mean':
         agent_class = WtcMean
+        additional_agent_kwarg = {}
     elif exploration == 'pets':
         agent_class = WtcPets
+        additional_agent_kwarg = {}
+    elif exploration == 'combrl':
+        int_reward_weight = linear_schedule(init_value=int_rew_weight_init,
+                                    end_value=int_rew_weight_end,
+                                    transition_steps=rew_decrease_steps)
+        agent_class = WtcCombrl
+        additional_agent_kwarg = {
+            'int_reward_weight': int_reward_weight,
+            'use_log': use_log,
+            'scale_with_aleatoric_std': scale_with_aleatoric_std}
+    else:
+        raise NotImplementedError(f'Unknown exploration strategy, got: {exploration}.')
+
 
     agent = agent_class(
         env=env,
@@ -260,7 +286,8 @@ def experiment(project_name: str = 'GPUSpeedTest',
         running_reward_min_bound=running_reward_min_bound,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
-        max_collected_data_in_buffer=max_replay_size_true_data_buffer
+        max_collected_data_in_buffer=max_replay_size_true_data_buffer,
+        **additional_agent_kwarg
     )
 
     agent_state = agent.run_episodes(num_episodes=num_episodes,
@@ -289,6 +316,11 @@ def main(args):
                beta_factor=args.beta_factor,
                horizon=args.horizon,
                transition_cost=args.transition_cost,
+               use_log=bool(args.use_log),
+               scale_with_aleatoric_std=bool(args.scale_with_aleatoric_std),
+               int_rew_weight_init=args.int_rew_weight_init,
+               int_rew_weight_end=args.int_rew_weight_end,
+               rew_decrease_steps=args.rew_decrease_steps,
                )
 
 
@@ -299,19 +331,24 @@ if __name__ == '__main__':
     parser.add_argument('--sac_horizon', type=int, default=100)
     parser.add_argument('--deterministic_policy_for_data_collection', type=int, default=0)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_episodes', type=int, default=50)
+    parser.add_argument('--num_episodes', type=int, default=15)
     parser.add_argument('--sac_steps', type=int, default=20_000)
     parser.add_argument('--min_bnn_steps', type=int, default=5_000)
     parser.add_argument('--max_bnn_steps', type=int, default=50_000)
     parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=0)
-    parser.add_argument('--exploration', type=str, default='mean')
+    parser.add_argument('--exploration', type=str, default='combrl')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
     parser.add_argument('--max_time_factor', type=int, default=30)
     parser.add_argument('--beta_factor', type=float, default=2.0)
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--transition_cost', type=float, default=0.1)
+    parser.add_argument('--use_log', type=int, default=0)
+    parser.add_argument('--scale_with_aleatoric_std', type=int, default=0)
+    parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
+    parser.add_argument('--int_rew_weight_end', type=float, default=0.0)
+    parser.add_argument('--rew_decrease_steps', type=int, default=15)
 
     args = parser.parse_args()
     main(args)
