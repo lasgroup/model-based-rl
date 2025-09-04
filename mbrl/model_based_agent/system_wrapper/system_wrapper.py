@@ -361,7 +361,7 @@ class WtcScCombrlDynamics(WtsScPetsDynamics, Generic[ModelState]):
         aleatoric_state_std = model_output.aleatoric_std[:-1]
         # TODO or something like this:
         #   aleatoric_state_std = dynamics_params.statistical_model_state.model_state.data_stats.outputs.std
-        intrinsic_reward = self.get_intrinsic_reward(epistemic_state_std, aleatoric_state_std)
+        intrinsic_reward = time_for_action * self.get_intrinsic_reward(epistemic_state_std, aleatoric_state_std)
 
         # # Time clipping like WtsSc* integrated reward. Is this needed?
         # intrinsic_reward = jnp.clip(intrinsic_reward,
