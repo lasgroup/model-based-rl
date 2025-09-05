@@ -45,6 +45,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                horizon: int = 100,
                transition_cost: float = 0.1,
                use_log: bool = False,
+               use_square: bool = False,
                scale_with_aleatoric_std: bool = False,
                int_rew_weight_init: float = 1.0,
                int_rew_weight_end: float = 0.0,
@@ -74,6 +75,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
                   horizon=horizon,
                   transition_cost=transition_cost,
                   use_log=use_log,
+                  use_square=use_square,
                   scale_with_aleatoric_std=scale_with_aleatoric_std,
                   int_rew_weight_init=int_rew_weight_init,
                   int_rew_weight_end=int_rew_weight_end,
@@ -261,6 +263,7 @@ def experiment(project_name: str = 'GPUSpeedTest',
         additional_agent_kwarg = {
             'int_reward_weight': int_reward_weight,
             'use_log': use_log,
+            'use_square': use_square,
             'scale_with_aleatoric_std': scale_with_aleatoric_std}
     else:
         raise NotImplementedError(f'Unknown exploration strategy, got: {exploration}.')
@@ -284,6 +287,9 @@ def experiment(project_name: str = 'GPUSpeedTest',
         deterministic_policy_for_data_collection=deterministic_policy_for_data_collection,
         running_reward_max_bound=running_reward_max_bound,
         running_reward_min_bound=running_reward_min_bound,
+        eval_envs=[eval_env],
+        reward_model_list=[TransitionReward()],
+        eval_frequency=1,
         first_episode_for_policy_training=first_episode_for_policy_training,
         reset_statistical_model=reset_statistical_model,
         max_collected_data_in_buffer=max_replay_size_true_data_buffer,
@@ -317,6 +323,7 @@ def main(args):
                horizon=args.horizon,
                transition_cost=args.transition_cost,
                use_log=bool(args.use_log),
+               use_square=bool(args.use_square),
                scale_with_aleatoric_std=bool(args.scale_with_aleatoric_std),
                int_rew_weight_init=args.int_rew_weight_init,
                int_rew_weight_end=args.int_rew_weight_end,
@@ -345,6 +352,7 @@ if __name__ == '__main__':
     parser.add_argument('--horizon', type=int, default=100)
     parser.add_argument('--transition_cost', type=float, default=0.1)
     parser.add_argument('--use_log', type=int, default=0)
+    parser.add_argument('--use_square', type=int, default=1)
     parser.add_argument('--scale_with_aleatoric_std', type=int, default=0)
     parser.add_argument('--int_rew_weight_init', type=float, default=1.0)
     parser.add_argument('--int_rew_weight_end', type=float, default=0.0)

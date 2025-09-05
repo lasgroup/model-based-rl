@@ -306,19 +306,22 @@ class WtcScOptimisticDynamics(WtsScPetsDynamics, Generic[ModelState]):
 
 
 class WtcScCombrlDynamics(WtsScPetsDynamics, Generic[ModelState]):
-    def __init__(self, use_log: bool = True, scale_with_aleatoric_std: bool = True, *args, **kwargs):
+    def __init__(self, use_log: bool = True, use_square: bool = False, scale_with_aleatoric_std: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_log = use_log
+        self.use_square = use_square
         self.scale_with_aleatoric_std = scale_with_aleatoric_std
 
     def get_intrinsic_reward(self, epistemic_std: chex.Array, aleatoric_std: chex.Array) -> chex.Array:
         if self.scale_with_aleatoric_std:
             # sigma^2_ep / sigma^2_al
             intrinsic_reward = jnp.square(epistemic_std / jnp.clip(aleatoric_std, a_min=1e-4))
-        else:
-            # TODO should probably NOT be squared
+        if self.use_square:
             # sigma^2_ep
             intrinsic_reward = jnp.square(epistemic_std)
+        else:
+            # sigma_ep
+            intrinsic_reward = epistemic_std
         if self.use_log:
             # use log transform
             intrinsic_reward = jnp.log(1 + intrinsic_reward)

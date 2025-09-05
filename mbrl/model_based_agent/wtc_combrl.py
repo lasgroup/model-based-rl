@@ -28,12 +28,14 @@ class WtcCombrl(WtcBaseModelBasedAgent):
     def __init__(self,
                  int_reward_weight: Union[float, optax.Schedule] = 1.0,
                  use_log: bool = False,
+                 use_square: bool = False,
                  scale_with_aleatoric_std: bool = True,
                  *args,
                  **kwargs):
         self.int_reward_weight = optax.constant_schedule(int_reward_weight) \
             if isinstance(int_reward_weight, float) else int_reward_weight
         self.use_log = use_log
+        self.use_square = use_square
         self.scale_with_aleatoric_std = scale_with_aleatoric_std
         super().__init__(*args, **kwargs)
 
@@ -42,6 +44,7 @@ class WtcCombrl(WtcBaseModelBasedAgent):
                       ) -> Actor:
         dynamics, system, actor = WtcScCombrlDynamics, WtcScCombrlSystem, PetsActor
         dynamics = dynamics(use_log=self.use_log,
+                            use_square=self.use_square,
                             scale_with_aleatoric_std=self.scale_with_aleatoric_std,
                             statistical_model=self.statistical_model,
                             running_reward_max_bound=self.running_reward_max_bound,

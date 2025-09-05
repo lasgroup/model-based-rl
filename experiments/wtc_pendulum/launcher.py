@@ -2,11 +2,11 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 base_config = {
-    'project_name': ['WTC_Pendulum_Sep_04_15_45_Test_OMBRL'],
+    'project_name': ['WTC_Pendulum_Sep_05_23_55_Test_Mean_Eval'],
     'num_offline_samples': [0, ],
     'sac_horizon': [100, ],
     'deterministic_policy_for_data_collection': [1, ],
-    'seed': list(range(3)),
+    'seed': list(range(5)),
     'num_episodes': [20, ],
     'sac_steps': [500_000, ],
     'min_bnn_steps': [5_000],
@@ -17,8 +17,9 @@ base_config = {
     'regression_model': ['FSVGD', ],
     'max_time_factor': [1, 5],
     'horizon': [200],
-    'transition_cost': [0.1, 0.5],
+    'transition_cost': [0.1],
     'use_log': [0],
+    'use_square': [0, 1],
     'scale_with_aleatoric_std': [0],
 }
 
@@ -44,10 +45,10 @@ combrl_config = {
 
 def main():
     command_list = []
-    flags_combinations = dict_permutations(combrl_config) + dict_permutations(mean_config)
-                         # + dict_permutations(optimistic_config)\
-                         # + dict_permutations(mean_config)\
-                         # + dict_permutations(pets_config)
+    flags_combinations = dict_permutations(combrl_config) + dict_permutations(mean_config) \
+                         + dict_permutations(optimistic_config)\
+                         + dict_permutations(mean_config)\
+                         + dict_permutations(pets_config)
     
     for flags in flags_combinations:
         cmd = generate_base_command(exp, flags=flags)
