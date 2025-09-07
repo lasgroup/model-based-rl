@@ -159,15 +159,10 @@ class WtcBaseModelBasedAgent(BaseModelBasedAgent):
             if isinstance(optimizer_new, BraxOptimizer):
                 optimizer_new.agent_kwargs['wandb_logging'] = False
             model = copy.deepcopy(self.statistical_model)
-            dynamics = dynamics_type(statistical_model=model,
-                                     x_dim=self.env.observation_size,
-                                     u_dim=self.env.action_size)
-            system = system_type(dynamics=dynamics,
-                                 reward=reward_model, )
-            actor = actor_type(env_observation_size=self.env.observation_size,
-                               env_action_size=self.env.action_size,
-                               optimizer=optimizer_new)
-            actor.set_system(system=system)
+            actor = self.prepare_wtc_actor(optimizer=optimizer_new,
+                                      dynamics=dynamics_type,
+                                      system=system_type,
+                                      actor=actor_type)
             key, key_data_buffers, key_optimizer = jr.split(key, 3)
             collected_data_buffer_state = self._init_data_buffer_states(key_data_buffers)
             init_optimizer_state = actor.init(key=key_optimizer,
