@@ -159,6 +159,7 @@ class WtcBaseModelBasedAgent(BaseModelBasedAgent):
             if isinstance(optimizer_new, BraxOptimizer):
                 optimizer_new.agent_kwargs['wandb_logging'] = False
             model = copy.deepcopy(self.statistical_model)
+            # TODO: Get reward model and model from loop/deepcopy
             actor = self.prepare_wtc_actor(optimizer=optimizer_new,
                                       dynamics=dynamics_type,
                                       system=system_type,
@@ -249,13 +250,13 @@ class WtcBaseModelBasedAgent(BaseModelBasedAgent):
                                                                   episode_idx=episode_idx,
                                                                   )
             for i in range(self.num_rewards):
-                env_interactor = self.env_interactors[i]
+                env_interactor: EnvInteractor = self.env_interactors[i]
                 actor, opt_state = actors_for_reward_models[i]
                 metrics = env_interactor.run_evaluation(actor=actor,
                                                         actor_state=opt_state)
                 metrics = {k + '_task_' + str(i): v for k, v in metrics.items()}
                 if self.log_to_wandb:
-                    wandb.log(metrics)
+                    wandb.log(metrics | {'episode_idx': episode_idx})
                 else:
                     print(metrics)
             print(f'End with evaluation of the policy')
