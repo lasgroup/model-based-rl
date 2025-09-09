@@ -7,7 +7,7 @@ base_config = {
     'sac_horizon': [100],
     'deterministic_policy_for_data_collection': [1],
     'seed': list(range(5)),
-    'num_episodes': [100],
+    'num_episodes': [80],
     'sac_steps': [500_000],
     'min_bnn_steps': [5_000],
     'max_bnn_steps': [50_000],
@@ -17,7 +17,7 @@ base_config = {
     'regression_model': ['FSVGD'],
     'max_time_factor': [1, 5],
     'horizon': [100],
-    'transition_cost': [0.2],
+    'transition_cost': [0.4, 0.6, 1.0],
     'use_log': [0],
     'scale_with_aleatoric_std': [0],
 }
@@ -39,7 +39,7 @@ mean_config = {
 combrl_config = {
     'exploration': ['combrl'],
     'use_square': [0, 1],
-    'int_rew_weight_init': [0.1, 1.0, 10, 100],
+    'int_rew_weight_init': [1.0, 10],
     'int_rew_weight_end': [0.0],
     'rew_decrease_steps': [100],
 } | base_config
@@ -63,7 +63,7 @@ def main():
                           mode='euler',
                           duration='23:59:00',
                           prompt=True,
-                          mem=16000)
+                          mem=25000)
 
 
 if __name__ == '__main__':

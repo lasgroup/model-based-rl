@@ -337,7 +337,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_bnn_steps', type=int, default=50_000)
     parser.add_argument('--linear_scheduler_steps', type=int, default=20_000)
     parser.add_argument('--first_episode_for_policy_training', type=int, default=0)
-    parser.add_argument('--exploration', type=str, default='mean')
+    parser.add_argument('--exploration', type=str, default='optimistic')
     parser.add_argument('--reset_statistical_model', type=int, default=0)
     parser.add_argument('--regression_model', type=str, default='FSVGD')
     parser.add_argument('--max_time_factor', type=int, default=30)
