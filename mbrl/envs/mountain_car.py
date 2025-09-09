@@ -13,22 +13,13 @@ class MountainCarEnv(Env):
     def __init__(self,
                  ):
         self.env = Continuous_MountainCarEnv()
-        # Cache Gym constants as JAX float32 to avoid float64 upcasts
-        self.min_position  = jnp.array(self.env.min_position,  jnp.float32)
-        self.max_position  = jnp.array(self.env.max_position,  jnp.float32)
-        self.max_speed     = jnp.array(self.env.max_speed,     jnp.float32)
-        self.goal_position = jnp.array(self.env.goal_position, jnp.float32)
-        self.goal_velocity = jnp.array(self.env.goal_velocity, jnp.float32)
-        self.power         = jnp.array(self.env.power,         jnp.float32)
-        self.max_action    = jnp.array(self.env.max_action,    jnp.float32)
 
     def reset(self,
               rng: jax.Array) -> State:
-        pos0 = jr.uniform(key=rng, minval=-0.6, maxval=-0.4, shape=(), dtype=jnp.float32)
-        obs = jnp.array([pos0, jnp.array(0.0, jnp.float32)], jnp.float32)
+        obs = jnp.array([jr.uniform(key=rng, minval=-0.6, maxval=-0.4, shape=()), 0.0])
         state = State(
             pipeline_state=None,
-            obs=obs,
+            obs=obs.astype(jnp.float32),
             reward=jnp.array(0.0, jnp.float32),
             done=jnp.array(0.0, jnp.float32),
             metrics={},
@@ -36,57 +27,57 @@ class MountainCarEnv(Env):
         )
         return state
 
-    def reward(self,
-               obs: Float[Array, '2'],
-               action: Float[Array, '1'],
-               next_obs: Float[Array, '2'], ) -> jax.Array:
-        pos = next_obs[..., 0]
-        vel = next_obs[..., 1]
-        terminate = jnp.logical_and(pos >= self.goal_position, vel >= self.goal_velocity)
-        reward = jnp.array(100.0, jnp.float32) * terminate.astype(jnp.float32)  # action cost handled elsewhere
-        return reward.reshape(-1).astype(jnp.float32).squeeze()
-
     def next_step(self,
                   obs: Float[Array, '2'],
                   action: Float[Array, '1'], ) -> Float[Array, '2']:
-        obs = jnp.atleast_2d(obs).reshape(-1, 2).astype(jnp.float32)
-        action = jnp.atleast_2d(action).reshape(-1, 1).astype(jnp.float32)
-
+        obs = jnp.atleast_2d(obs).reshape(-1, 2)
+        action = jnp.atleast_2d(action).reshape(-1, 1)
         pos = obs[..., 0]
-        vel = obs[..., 1]
-
-        force = jnp.clip(action, a_min=-1.0, a_max=1.0) * self.max_action
-        next_vel = vel + force * self.power - jnp.array(0.0025, jnp.float32) * jnp.cos(3.0 * pos)
-        next_vel = jnp.clip(next_vel, a_min=-self.max_speed, a_max=self.max_speed)
-
-        next_pos = pos + next_vel
-        next_pos = jnp.clip(next_pos, self.min_position, self.max_position)
-
-        out_of_bounds = jnp.logical_and(next_pos - self.min_position <= 0.0, next_vel < 0.0)
-        next_vel = jnp.where(out_of_bounds, jnp.array(0.0, jnp.float32), next_vel)
-
-        next_obs = jnp.concatenate([next_pos, next_vel], axis=-1).reshape(-1, 2).squeeze()
-        return next_obs.astype(jnp.float32)
+        velocity = obs[..., 1]
+        force = jnp.clip(action, a_min=-1, a_max=1) * self.env.max_action
+        next_velocity = velocity + force * self.env.power - 0.0025 * jnp.cos(3 * pos)
+        next_velocity = jnp.clip(next_velocity, a_min=-self.env.max_speed, a_max=self.env.max_speed)
+        next_position = pos + next_velocity
+        next_position = jnp.clip(next_position, self.env.min_position, self.env.max_position)
+        out_of_bounds = jnp.logical_and(next_position - self.env.min_position <= 0.0, next_velocity < 0.0)
+        next_velocity = jnp.where(out_of_bounds, jnp.array(0.0, jnp.float32), next_velocity)
+        next_obs = jnp.concatenate([next_position, next_velocity], axis=-1).reshape(-1, 2).squeeze()
+        return next_obs
 
     @partial(jax.jit, static_argnums=0)
-    def step(self, state: State, action: jax.Array) -> State:
-        obs = state.obs
-        assert obs.shape == (self.observation_size,)
-        assert action.shape == (self.action_size,)
+    def step(self,
+             state: State,
+             action: jax.Array) -> State:
+        # Check if the episode was already done
+        done = state.done
 
-        next_obs = self.next_step(obs, action)
-        reward = self.reward(obs, action, next_obs)
+        # 1. Calculate the potential next state based on physics
+        potential_next_obs = self.next_step(state.obs, action)
+        
+        # 2. Determine if this new potential state meets the termination condition
+        pos = potential_next_obs[0]
+        velocity = potential_next_obs[1]
+        just_terminated = jnp.logical_and(pos >= self.env.goal_position, velocity >= self.env.goal_velocity)
+        
+        # 3. Calculate the reward for this step
+        # The reward is 100.0 only if we *just* terminated. If the episode was already done, the reward is 0.
+        reward = jnp.where(done, 0.0, 100.0 * just_terminated)
 
-        # compute termination again here to set done
-        pos = next_obs[..., 0]
-        vel = next_obs[..., 1]
-        terminate = jnp.logical_and(pos >= self.goal_position, vel >= self.goal_velocity)
-        done = jnp.where(terminate, jnp.array(1.0, jnp.float32), state.done)
+        # 4. Determine the actual next observation
+        # If the episode was already done, the observation does not change ("freezes").
+        # Otherwise, we update to the new potential observation.
+        # We need to reshape `done` to broadcast correctly with the `obs` array.
+        next_obs = jnp.where(done.reshape(-1), state.obs, potential_next_obs)
 
+        # 5. Update the done flag
+        # The episode is done if it was already done OR if it just terminated.
+        next_done = jnp.logical_or(done, just_terminated).astype(jnp.float32)
+        
+        # Construct the final next state
         next_state = State(pipeline_state=state.pipeline_state,
                            obs=next_obs,
-                           reward=reward.astype(jnp.float32),
-                           done=done.astype(jnp.float32),
+                           reward=reward,
+                           done=next_done,
                            metrics=state.metrics,
                            info=state.info)
         return next_state
@@ -105,6 +96,7 @@ class MountainCarEnv(Env):
 
     def backend(self) -> str:
         return 'positional'
+    
 
 
 def simple_policy_batched(obs_b: jnp.ndarray) -> jnp.ndarray:
@@ -115,7 +107,7 @@ def simple_policy_batched(obs_b: jnp.ndarray) -> jnp.ndarray:
 
 def main():
     from brax.envs import training 
-    from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
+    from mbrl.utils.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
     jax.config.update("jax_disable_jit", True)
 
     time_horizon = 10_000
@@ -125,7 +117,7 @@ def main():
                               num_integrator_steps=time_horizon,
                               min_time_between_switches=1,
                               max_time_between_switches=1,
-                              switch_cost=ConstantSwitchCost(value=jnp.array(0.0)),
+                              switch_cost=ConstantSwitchCost(value=jnp.array(0.1)),
                               time_as_part_of_state=True)
     wrapped = training.wrap(env, episode_length=time_horizon, action_repeat=1)
 
@@ -146,9 +138,10 @@ def main():
             [raw_action, jnp.ones((B, 1), dtype=jnp.float32)], axis=-1
     )  # -> (B, 2)
         prev_steps = int(state.info['steps'][0].item())
-        if prev_steps == 108:
+        if prev_steps == 107:
             pass
         state = wrapped.step(state, action_b)
+        print(state.obs[0], float(state.reward[0]), int(state.done[0]), int(state.info['steps'][0]), int(state.info['truncation'][0]))
 
         if int(state.done[0].item()) == 1:
             trunc = int(state.info['truncation'][0].item())

@@ -16,7 +16,7 @@ from jax.nn import swish
 from mbpo.optimizers import SACOptimizer
 from mbpo.systems.rewards.base_rewards import Reward, RewardParams
 from wtc.utils import discrete_to_continuous_discounting
-from wtc.wrappers.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
+from mbrl.utils.ih_switching_cost import IHSwitchCostWrapper, ConstantSwitchCost
 
 from mbrl.envs.mountain_car import MountainCarEnv
 from mbrl.model_based_agent import WtcPets, WtcMean, WtcOptimistic, WtcCombrl
