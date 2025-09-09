@@ -2,10 +2,10 @@ import exp
 from experiments.util import generate_run_commands, generate_base_command, dict_permutations
 
 base_config = {
-    'project_name': ['WTC_MountainCar_Sep_09_23_55_Test_1'],
+    'project_name': ['WTC_MountainCar_Sep_09_17_00_Test_2'],
     'num_offline_samples': [0, ],
     'sac_horizon': [100, ],
-    'deterministic_policy_for_data_collection': [1, ],
+    'deterministic_policy_for_data_collection': [0, 1, ],
     'seed': list(range(5)),
     'num_episodes': [20, ],
     'sac_steps': [500_000, ],
